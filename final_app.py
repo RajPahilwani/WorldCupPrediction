@@ -120,7 +120,26 @@ p,label,[data-testid="stText"]{color:var(--text);}
   border-radius:10px!important;
 }
 [data-testid="stFileUploader"] *{color:var(--text)!important;}
-
+/* Force dark mode for all containers */
+.stApp {
+    background: #080D1A !important;
+}
+[data-testid="stHeader"] {
+    background: #060A14 !important;
+}
+[data-testid="stToolbar"] {
+    background: #060A14 !important;
+}
+[data-testid="stDecoration"] {
+    background: #060A14 !important;
+}
+[data-testid="stFileUploader"] {
+    background: #192236 !important;
+    border: 2px dashed #1E2D45 !important;
+}
+[data-testid="stFileUploader"] * {
+    color: #F1F5F9 !important;
+}
 /* ─ Metrics ─ */
 [data-testid="stMetric"]{background:var(--surf2);border:1px solid var(--border);
   border-radius:10px;padding:.9rem 1rem;}
