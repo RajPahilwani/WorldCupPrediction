@@ -1669,44 +1669,47 @@ def render_sidebar() -> Optional[pd.DataFrame]:
         # Custom styled file uploader - DARK background with GREEN accent
         st.markdown("""
         <style>
-        /* Force dark background on file uploader */
+        /* Entire uploader */
         [data-testid="stFileUploader"] {
             background: #0D1F1A !important;
             border: 2px solid #34D399 !important;
             border-radius: 10px !important;
-            padding: 0.5rem !important;
+            padding: 0.75rem !important;
         }
+
+        /* Drop area */
+        [data-testid="stFileUploaderDropzone"] {
+            background: #101828 !important;
+            border: 2px dashed #34D399 !important;
+            border-radius: 8px !important;
+        }
+
+        /* Everything inside */
         [data-testid="stFileUploader"] * {
             color: #F1F5F9 !important;
         }
-        [data-testid="stFileUploader"] .st-df,
-        [data-testid="stFileUploader"] .st-eb {
-            background: #101828 !important;
-        }
-        [data-testid="stFileUploader"] .st-ae {
+
+        /* Browse files button */
+        [data-testid="stFileUploader"] button {
+            background: #1E293B !important;
             color: #34D399 !important;
+            border: 1px solid #34D399 !important;
         }
-        [data-testid="stFileUploader"] .st-cd {
-            background: #101828 !important;
+
+        /* Button hover */
+        [data-testid="stFileUploader"] button:hover {
+            background: #243244 !important;
         }
-        /* The actual upload button area */
-        [data-testid="stFileUploader"] .st-ef {
-            background: #101828 !important;
-            color: #F1F5F9 !important;
+
+        /* SVG upload icon */
+        [data-testid="stFileUploader"] svg {
+            fill: #34D399 !important;
         }
-        /* The drop zone text */
-        [data-testid="stFileUploader"] .st-bb {
-            color: #F1F5F9 !important;
-        }
-        /* The drag and drop area */
-        [data-testid="stFileUploader"] .st-df {
-            background: #101828 !important;
-            border: 2px dashed #34D399 !important;
-        }
-        /* Green glow on hover */
-        [data-testid="stFileUploader"]:hover {
+
+        /* Hover effect */
+        [data-testid="stFileUploaderDropzone"]:hover {
             border-color: #6EE7B7 !important;
-            box-shadow: 0 0 20px rgba(52,211,153,0.15) !important;
+            box-shadow: 0 0 18px rgba(52,211,153,.2);
         }
         </style>
         """, unsafe_allow_html=True)
