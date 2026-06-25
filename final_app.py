@@ -1662,17 +1662,18 @@ def render_sidebar() -> Optional[pd.DataFrame]:
                 st.warning(f"Could not load default dataset: {e}")
 
         # Upload override
-        st.markdown("<div class='sidebar-label'>Or upload your own CSV</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sidebar-label' style='color:#94A3B8;'>Or upload your own CSV</div>",
+                    unsafe_allow_html=True)
         uploaded = st.file_uploader("Upload CSV (overrides default)", type=["csv"], label_visibility="collapsed")
 
         st.markdown("""
-<div style='margin-top:.5rem;padding:.6rem;background:#192236;border-radius:8px;border:1px solid #1E2D45;'>
-<p style='font-size:.75rem;color:#64748B;margin:0;line-height:1.5;'>
-Required columns:<br>
-<code style='color:#22D3EE;font-size:.72rem;'>Team 1, Team 2, Goals1, Goals2, Elo1, Elo2</code><br>
-Optional: <code style='color:#94A3B8;font-size:.72rem;'>Date, Stage</code>
-</p>
-</div>""", unsafe_allow_html=True)
+        <div style='margin-top:.5rem;padding:.6rem;background:#192236;border-radius:8px;border:1px solid #1E2D45;'>
+        <p style='font-size:.75rem;color:#94A3B8;margin:0;line-height:1.5;'>
+        Required columns:<br>
+        <code style='color:#22D3EE;font-size:.72rem;'>Team 1, Team 2, Goals1, Goals2, Elo1, Elo2</code><br>
+        Optional: <code style='color:#94A3B8;font-size:.72rem;'>Date, Stage</code>
+        </p>
+        </div>""", unsafe_allow_html=True)
 
         # Determine which dataset to use
         df = None
