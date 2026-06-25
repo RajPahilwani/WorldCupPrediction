@@ -1666,10 +1666,10 @@ def render_sidebar() -> Optional[pd.DataFrame]:
             "<div class='sidebar-label' style='color:#94A3B8;margin-bottom:0.3rem;'>Or upload your own CSV</div>",
             unsafe_allow_html=True)
 
-        # Custom styled file uploader with green accent
+        # Custom styled file uploader - DARK background with GREEN accent
         st.markdown("""
         <style>
-        /* Style the file uploader container with green accent */
+        /* Force dark background on file uploader */
         [data-testid="stFileUploader"] {
             background: #0D1F1A !important;
             border: 2px solid #34D399 !important;
@@ -1686,6 +1686,23 @@ def render_sidebar() -> Optional[pd.DataFrame]:
         [data-testid="stFileUploader"] .st-ae {
             color: #34D399 !important;
         }
+        [data-testid="stFileUploader"] .st-cd {
+            background: #101828 !important;
+        }
+        /* The actual upload button area */
+        [data-testid="stFileUploader"] .st-ef {
+            background: #101828 !important;
+            color: #F1F5F9 !important;
+        }
+        /* The drop zone text */
+        [data-testid="stFileUploader"] .st-bb {
+            color: #F1F5F9 !important;
+        }
+        /* The drag and drop area */
+        [data-testid="stFileUploader"] .st-df {
+            background: #101828 !important;
+            border: 2px dashed #34D399 !important;
+        }
         /* Green glow on hover */
         [data-testid="stFileUploader"]:hover {
             border-color: #6EE7B7 !important;
@@ -1700,8 +1717,8 @@ def render_sidebar() -> Optional[pd.DataFrame]:
         <div style='margin-top:.5rem;padding:.6rem;background:#192236;border-radius:8px;border:1px solid #1E2D45;'>
         <p style='font-size:.75rem;color:#94A3B8;margin:0;line-height:1.5;'>
         📋 Required columns:<br>
-        <code style='color:#34D399;font-size:.72rem;'>Team 1, Team 2, Goals1, Goals2, Elo1, Elo2</code><br>
-        <code style='color:#94A3B8;font-size:.72rem;'>Date, Stage</code> <span style='color:#64748B;font-size:.7rem;'>(optional)</span><br>
+        <code style='color:#34D399 !important;font-size:.72rem;background:rgba(52,211,153,0.1);padding:0.1rem 0.3rem;border-radius:3px;'>Team 1, Team 2, Goals1, Goals2, Elo1, Elo2</code><br>
+        <code style='color:#94A3B8 !important;font-size:.72rem;background:rgba(148,163,184,0.08);padding:0.1rem 0.3rem;border-radius:3px;'>Date, Stage</code> <span style='color:#64748B;font-size:.7rem;'>(optional)</span><br>
         <span style='color:#64748B;font-size:.65rem;'>⬆ Max file size: 200MB</span>
         </p>
         </div>""", unsafe_allow_html=True)
