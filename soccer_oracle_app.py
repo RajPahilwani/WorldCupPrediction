@@ -231,7 +231,7 @@ p,label,[data-testid="stText"]{color:var(--text);}
 # ─────────────────────────────────────────────────────────────────────────────
 # MODEL CONSTANTS
 # ─────────────────────────────────────────────────────────────────────────────
-MAX_GOALS = 9
+MAX_GOALS = 15
 RECENCY_HALF_LIFE_DAYS = 365.0
 ENSEMBLE_CV = 5
 HOLDOUT_FRACTION = 0.05
@@ -241,7 +241,7 @@ DEFAULT_LEAGUE_GOALS_PER_TEAM = 1.65
 DEFAULT_ATTACK_STRENGTH = 1.0
 DEFAULT_DEFENSE_WEAKNESS = 1.0
 DEFAULT_FORM = 50.0
-STRENGTH_SMOOTHING = 3.0
+STRENGTH_SMOOTHING = 1.5
 H2H_HALF_LIFE_DAYS = 1825.0
 EPS = 1e-9
 

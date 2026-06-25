@@ -963,55 +963,55 @@ Date,Team 1,Team 2,Goals1,Goals2,Elo1,Elo2,Stage
 2022-12-14,France,Morocco,2,0,1741.8534578422853,1533.685515180007,Semi-finals
 2022-12-17,Croatia,Morocco,2,1,1586.8013347885721,1522.5602760237573,Third-place match
 2022-12-18,Argentina,France,3,3,1695.4696210923275,1752.978696998535,Final
-2026-06-11,Mexico,South Africa,2,0,1721.78,1418.21,Group stage
-2026-06-11,South Korea,Czechia,2,1,1591.75,1481.49,Group stage
-2026-06-12,Canada,Bosnia-Herzegovina,1,1,1572.13,1381.18,Group stage
-2026-06-12,USA,Paraguay,4,1,1709.59,1517.39,Group stage
-2026-06-13,Qatar,Switzerland,1,1,1438.82,1654.94,Group stage
-2026-06-13,Brazil,Morocco,1,1,1772.01,1769.98,Group stage
-2026-06-13,Haiti,Scotland,0,3,1271.0,1504.41,Group stage
-2026-06-13,Australia,Turkiye,2,0,1584.55,1550.13,Group stage
-2026-06-14,Germany,Curacao,7,1,1760.46,1299.41,Group stage
-2026-06-14,Netherlands,Japan,2,2,1764.4,1681.26,Group stage
-2026-06-14,Cote d'Ivoire,Ecuador,1,0,1551.71,1558.35,Group stage
-2026-06-14,Sweden,Tunisia,5,1,1517.99,1437.69,Group stage
-2026-06-15,Spain,Cabo Verde,0,0,1864.32,1401.77,Group stage
-2026-06-15,Belgium,Egypt,1,1,1727.88,1583.37,Group stage
-2026-06-15,Saudi Arabia,Uruguay,1,1,1426.71,1649.96,Group stage
-2026-06-15,IR Iran,New Zealand,2,2,1611.18,1277.34,Group stage
-2026-06-16,France,Senegal,3,1,1887.11,1667.66,Group stage
-2026-06-16,Iraq,Norway,1,4,1426.53,1577.18,Group stage
-2026-06-16,Argentina,Algeria,3,0,1889.06,1559.24,Group stage
-2026-06-16,Austria,Jordan,3,1,1612.86,1372.29,Group stage
-2026-06-17,Portugal,Congo DR,1,1,1755.09,1487.18,Group stage
-2026-06-17,England,Croatia,4,2,1847.68,1695.21,Group stage
-2026-06-17,Ghana,Panama,1,0,1380.71,1505.33,Group stage
-2026-06-17,Uzbekistan,Colombia,1,3,1444.48,1712.6,Group stage
-2026-06-18,Czechia,South Africa,1,1,1481.49,1418.21,Group stage
-2026-06-18,Switzerland,Bosnia-Herzegovina,4,1,1654.94,1381.18,Group stage
-2026-06-18,Canada,Qatar,6,0,1572.13,1438.82,Group stage
-2026-06-18,Mexico,South Korea,1,0,1721.78,1591.75,Group stage
-2026-06-19,USA,Australia,2,0,1709.59,1584.55,Group stage
-2026-06-19,Scotland,Morocco,0,1,1504.41,1769.98,Group stage
-2026-06-19,Brazil,Haiti,3,0,1772.01,1271.0,Group stage
-2026-06-19,Turkiye,Paraguay,0,1,1550.13,1517.39,Group stage
-2026-06-20,Netherlands,Sweden,5,1,1764.4,1517.99,Group stage
-2026-06-20,Germany,Cote d'Ivoire,2,1,1760.46,1551.71,Group stage
-2026-06-20,Ecuador,Curacao,0,0,1558.35,1299.41,Group stage
-2026-06-20,Tunisia,Japan,0,4,1437.69,1681.26,Group stage
-2026-06-21,Spain,Saudi Arabia,4,0,1864.32,1426.71,Group stage
-2026-06-21,Belgium,IR Iran,0,0,1727.88,1611.18,Group stage
-2026-06-21,Uruguay,Cabo Verde,2,2,1649.96,1401.77,Group stage
-2026-06-21,New Zealand,Egypt,1,3,1277.34,1583.37,Group stage
-2026-06-22,Argentina,Austria,2,0,1889.06,1612.86,Group stage
-2026-06-22,France,Iraq,3,0,1887.11,1426.53,Group stage
-2026-06-22,Norway,Senegal,3,2,1577.18,1667.66,Group stage
-2026-06-22,Jordan,Algeria,1,2,1372.29,1559.24,Group stage
-2026-06-23,Portugal,Uzbekistan,5,0,1755.09,1444.48,Group stage
-2026-06-23,England,Ghana,0,0,2021.66,1502.25,Group stage
-2026-06-23,Panama,Croatia,0,1,1738.83,1928.58,Group stage
-2026-06-23,Colombia,Congo DR,1,0,1981.13,1620.58,Group stage
-2026-06-24,Switzerland,Canada,2,1,1881.47,1789.73,Group stage
-2026-06-24,Bosnia-Herzegovina,Qatar,3,1,1557.31,1438.82,Group stage
-2026-06-24,Morocco,Haiti,4,2,1820.98,1515.86,Group stage
-2026-06-24,Scotland,Brazil,0,3,1764.08,1984.37,Group stage
+2026-06-11,Mexico,South Africa,2,0,1896,1500,Group stage
+2026-06-11,South Korea,Czechia,2,1,1771,1731,Group stage
+2026-06-12,Canada,Bosnia-Herzegovina,1,1,1777,1580,Group stage
+2026-06-12,USA,Paraguay,4,1,1820,1816,Group stage
+2026-06-13,Qatar,Switzerland,1,1,1550,1885,Group stage
+2026-06-13,Brazil,Morocco,1,1,1986,1866,Group stage
+2026-06-13,Haiti,Scotland,0,3,1550,1768,Group stage
+2026-06-13,Australia,Turkiye,2,0,1799,1813,Group stage
+2026-06-14,Germany,Curacao,7,1,1954,1500,Group stage
+2026-06-14,Netherlands,Japan,2,2,1972,1925,Group stage
+2026-06-14,Cote d'Ivoire,Ecuador,1,0,1650,1864,Group stage
+2026-06-14,Sweden,Tunisia,5,1,1660,1630,Group stage
+2026-06-15,Spain,Cabo Verde,0,0,2134,1500,Group stage
+2026-06-15,Belgium,Egypt,1,1,1869,1740,Group stage
+2026-06-15,Saudi Arabia,Uruguay,1,1,1635,1851,Group stage
+2026-06-15,IR Iran,New Zealand,2,2,1766,1500,Group stage
+2026-06-16,France,Senegal,3,1,2090,1817,Group stage
+2026-06-16,Iraq,Norway,1,4,1600,1951,Group stage
+2026-06-16,Argentina,Algeria,3,0,2144,1780,Group stage
+2026-06-16,Austria,Jordan,3,1,1841,1689,Group stage
+2026-06-17,Portugal,Congo DR,1,1,1988,1550,Group stage
+2026-06-17,England,Croatia,4,2,2028,1896,Group stage
+2026-06-17,Ghana,Panama,1,0,1620,1733,Group stage
+2026-06-17,Uzbekistan,Colombia,1,3,1728,1998,Group stage
+2026-06-18,Czechia,South Africa,1,1,1731,1500,Group stage
+2026-06-18,Switzerland,Bosnia-Herzegovina,4,1,1885,1580,Group stage
+2026-06-18,Canada,Qatar,6,0,1777,1550,Group stage
+2026-06-18,Mexico,South Korea,1,0,1896,1771,Group stage
+2026-06-19,USA,Australia,2,0,1820,1799,Group stage
+2026-06-19,Scotland,Morocco,0,1,1768,1866,Group stage
+2026-06-19,Brazil,Haiti,3,0,1986,1550,Group stage
+2026-06-19,Turkiye,Paraguay,0,1,1813,1816,Group stage
+2026-06-20,Netherlands,Sweden,5,1,1972,1660,Group stage
+2026-06-20,Germany,Cote d'Ivoire,2,1,1954,1650,Group stage
+2026-06-20,Ecuador,Curacao,0,0,1864,1500,Group stage
+2026-06-20,Tunisia,Japan,0,4,1630,1925,Group stage
+2026-06-21,Spain,Saudi Arabia,4,0,2134,1635,Group stage
+2026-06-21,Belgium,IR Iran,0,0,1869,1766,Group stage
+2026-06-21,Uruguay,Cabo Verde,2,2,1851,1500,Group stage
+2026-06-21,New Zealand,Egypt,1,3,1500,1740,Group stage
+2026-06-22,Argentina,Austria,2,0,2144,1841,Group stage
+2026-06-22,France,Iraq,3,0,2090,1600,Group stage
+2026-06-22,Norway,Senegal,3,2,1951,1817,Group stage
+2026-06-22,Jordan,Algeria,1,2,1689,1780,Group stage
+2026-06-23,Portugal,Uzbekistan,5,0,1988,1728,Group stage
+2026-06-23,England,Ghana,0,0,2028,1620,Group stage
+2026-06-23,Panama,Croatia,0,1,1733,1896,Group stage
+2026-06-23,Colombia,Congo DR,1,0,1998,1550,Group stage
+2026-06-24,Switzerland,Canada,2,1,1885,1777,Group stage
+2026-06-24,Bosnia-Herzegovina,Qatar,3,1,1580,1550,Group stage
+2026-06-24,Morocco,Haiti,4,2,1866,1550,Group stage
+2026-06-24,Scotland,Brazil,0,3,1768,1986,Group stage

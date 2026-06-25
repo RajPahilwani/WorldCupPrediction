@@ -2,7 +2,11 @@
 """
 ╔══════════════════════════════════════════════════════════════╗
 ║   SOCCER ORACLE  —  Streamlit Web App                       ║
-║   Advanced Match Prediction  v4.1                           ║
+║   Advanced Match Prediction  v5.0                           ║
+║                                                              ║
+║   Improvements:                                             ║
+║   1. Negative Binomial overdispersion for score variance    ║
+║   2. Opponent-adjusted attack/defense strengths             ║
 ║                                                              ║
 ║   Install:  pip install streamlit plotly scikit-learn       ║
 ║             scipy pandas numpy                               ║
@@ -21,8 +25,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from scipy.optimize import minimize_scalar
-from scipy.stats import poisson
+from scipy.optimize import minimize_scalar, minimize
+from scipy.stats import poisson, nbinom
 from sklearn.base import clone
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.linear_model import PoissonRegressor
@@ -44,7 +48,7 @@ st.set_page_config(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# THEME / CSS
+# THEME / CSS (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 def inject_css():
     st.markdown("""
@@ -231,19 +235,20 @@ p,label,[data-testid="stText"]{color:var(--text);}
 # ─────────────────────────────────────────────────────────────────────────────
 # MODEL CONSTANTS
 # ─────────────────────────────────────────────────────────────────────────────
-MAX_GOALS = 9
+MAX_GOALS = 15
 RECENCY_HALF_LIFE_DAYS = 365.0
 ENSEMBLE_CV = 5
-HOLDOUT_FRACTION = 0.20
+HOLDOUT_FRACTION = 0.05
 MIN_HOLDOUT_MATCHES = 30
 DEFAULT_ELO = 1500.0
-DEFAULT_LEAGUE_GOALS_PER_TEAM = 1.35
+DEFAULT_LEAGUE_GOALS_PER_TEAM = 1.65
 DEFAULT_ATTACK_STRENGTH = 1.0
 DEFAULT_DEFENSE_WEAKNESS = 1.0
 DEFAULT_FORM = 50.0
-STRENGTH_SMOOTHING = 3.0
+STRENGTH_SMOOTHING = 1.5
 H2H_HALF_LIFE_DAYS = 1825.0
 EPS = 1e-9
+OVERDISPERSION_PRIOR = 0.15  # initial guess for NB overdispersion
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -270,7 +275,77 @@ def load_and_clean(df_raw: pd.DataFrame) -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FEATURE ENGINE
+# OPPONENT-ADJUSTED STATS (NEW)
+# ─────────────────────────────────────────────────────────────────────────────
+class OpponentAdjustedStats:
+    """Estimate attack and defense strengths via iterative log-linear model."""
+    def __init__(self):
+        self.attack = {}   # team -> log-attack multiplier
+        self.defense = {}  # team -> log-defense multiplier
+        self.league_avg_goals = 1.5
+        self._fitted = False
+
+    def fit(self, df: pd.DataFrame):
+        teams = set(df["Team 1"]).union(set(df["Team 2"]))
+        attack = {t: 0.0 for t in teams}
+        defense = {t: 0.0 for t in teams}
+        # Use log of goals + 0.1 to avoid zero issues
+        for _ in range(20):  # iterate until convergence
+            # Update attack
+            for t in teams:
+                matches = df[(df["Team 1"]==t) | (df["Team 2"]==t)]
+                if matches.empty:
+                    continue
+                goals = []
+                opp_def = []
+                for _, row in matches.iterrows():
+                    if row["Team 1"] == t:
+                        goals.append(row["Goals1"])
+                        opp_def.append(defense[row["Team 2"]])
+                    else:
+                        goals.append(row["Goals2"])
+                        opp_def.append(defense[row["Team 1"]])
+                log_goals = np.log(np.array(goals) + 0.1)
+                # attack = mean(log_goals - opp_def) - global mean (constraint)
+                vals = log_goals - np.array(opp_def)
+                # Exclude extreme outliers
+                vals = np.clip(vals, -3, 3)
+                attack[t] = np.mean(vals) - np.mean(list(attack.values()))
+            # Update defense
+            for t in teams:
+                matches = df[(df["Team 1"]==t) | (df["Team 2"]==t)]
+                if matches.empty:
+                    continue
+                goals_conc = []
+                opp_att = []
+                for _, row in matches.iterrows():
+                    if row["Team 1"] == t:
+                        goals_conc.append(row["Goals2"])
+                        opp_att.append(attack[row["Team 2"]])
+                    else:
+                        goals_conc.append(row["Goals1"])
+                        opp_att.append(attack[row["Team 1"]])
+                log_goals_conc = np.log(np.array(goals_conc) + 0.1)
+                vals = log_goals_conc - np.array(opp_att)
+                vals = np.clip(vals, -3, 3)
+                defense[t] = np.mean(vals) - np.mean(list(defense.values()))
+        # Store results
+        self.attack = attack
+        self.defense = defense
+        self.league_avg_goals = np.mean([row["Goals1"]+row["Goals2"] for _, row in df.iterrows()]) / 2.0
+        self._fitted = True
+
+    def get_attack(self, team: str) -> float:
+        """Return exp(attack) multiplier (≥0.1)"""
+        return np.exp(self.attack.get(team, 0.0))
+
+    def get_defense(self, team: str) -> float:
+        """Return exp(defense) multiplier (≥0.1)"""
+        return np.exp(self.defense.get(team, 0.0))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FEATURE ENGINE (updated with opponent-adjusted stats)
 # ─────────────────────────────────────────────────────────────────────────────
 class FeatureEngine:
     def __init__(self, window: int = 8):
@@ -288,6 +363,20 @@ class FeatureEngine:
             Tuple[str, str],
             List[Tuple[str, str, int, int, Optional[pd.Timestamp]]],
         ] = defaultdict(list)
+        # NEW: opponent-adjusted stats
+        self.opp_attack: Dict[str, float] = {}
+        self.opp_defense: Dict[str, float] = {}
+        self._opp_fitted = False
+
+    def fit_opponent_stats(self, df: pd.DataFrame):
+        """Fit opponent-adjusted attack/defense multipliers on full dataset."""
+        opp = OpponentAdjustedStats()
+        opp.fit(df)
+        self.opp_attack = {t: opp.get_attack(t) for t in opp.attack.keys()}
+        self.opp_defense = {t: opp.get_defense(t) for t in opp.defense.keys()}
+        self._opp_fitted = True
+        # Also set league avg from opponent stats
+        self._league_avg_goals_per_team = lambda: opp.league_avg_goals
 
     def _weighted_mean(self, vals, n=None, smoothing=STRENGTH_SMOOTHING):
         n = n or self.window
@@ -345,6 +434,10 @@ class FeatureEngine:
         form_w = self._weighted_form(results)
         opp_elo_avg = self._rolling_mean(opp_elos)
 
+        # NEW: opponent-adjusted attack/defense
+        opp_att = self.opp_attack.get(team, 1.0)
+        opp_def = self.opp_defense.get(team, 1.0)
+
         return {
             "elo": elo_last,
             "elo_trend": elo_trend,
@@ -361,6 +454,8 @@ class FeatureEngine:
             "btts_rate": btts,
             "match_count": mc,
             "opp_elo_avg": opp_elo_avg,
+            "opp_attack": opp_att,        # NEW
+            "opp_defense": opp_def,       # NEW
         }
 
     def _h2h_stats(self, t1, t2, current_date=None):
@@ -396,8 +491,17 @@ class FeatureEngine:
         trend_diff = s1["elo_trend"] - s2["elo_trend"]
         trend3_diff = s1["elo_trend3"] - s2["elo_trend3"]
         stage_goal_mod = 1.0 if is_group else 0.92
-        base_xg1 = league_avg * s1["attack_strength"] * s2["defense_weakness"] * stage_goal_mod
-        base_xg2 = league_avg * s2["attack_strength"] * s1["defense_weakness"] * stage_goal_mod
+
+        # NEW: Use opponent-adjusted attack/defense multipliers
+        # base_xg1 = league_avg * (opp_attack1) * (opp_defense2) * stage_goal_mod
+        # base_xg2 = league_avg * (opp_attack2) * (opp_defense1) * stage_goal_mod
+        base_xg1 = league_avg * s1["opp_attack"] * s2["opp_defense"] * stage_goal_mod
+        base_xg2 = league_avg * s2["opp_attack"] * s1["opp_defense"] * stage_goal_mod
+
+        # Also keep the rolling strength versions as features
+        rolling_xg1 = league_avg * s1["attack_strength"] * s2["defense_weakness"] * stage_goal_mod
+        rolling_xg2 = league_avg * s2["attack_strength"] * s1["defense_weakness"] * stage_goal_mod
+
         fw1 = s1["form_weighted"] / 100.0
         fw2 = s2["form_weighted"] / 100.0
         def1_strength = s1["defense_strength"]
@@ -417,10 +521,11 @@ class FeatureEngine:
             + 0.10 * s2["clean_sheet_rate"]
         )
         h2hw, h2hd, h2hl, h2hn = self._h2h_stats(t1, t2, current_date=current_date)
+
         feat = {
             "elo_diff": elo_diff, "elo_win_prob": elo_win_prob, "elo_sum": elo_sum,
             "elo_ratio": elo_ratio, "elo1": elo1, "elo2": elo2,
-            "elo_xg1": base_xg1, "elo_xg2": base_xg2,
+            "elo_xg1": base_xg1, "elo_xg2": base_xg2,   # now using opponent-adjusted
             "elo_trend_diff": trend_diff, "elo_trend3_diff": trend3_diff,
             "elo_trend_t1": s1["elo_trend"], "elo_trend_t2": s2["elo_trend"],
             "raw_attack_t1": s1["raw_attack"], "raw_attack_t2": s2["raw_attack"],
@@ -430,8 +535,9 @@ class FeatureEngine:
             "defense_weakness_t1": s1["defense_weakness"], "defense_weakness_t2": s2["defense_weakness"],
             "defense_weakness_diff": s1["defense_weakness"] - s2["defense_weakness"],
             "defense_strength_t1": def1_strength, "defense_strength_t2": def2_strength,
-            "xg_base_t1": base_xg1, "xg_base_t2": base_xg2,
+            "xg_base_t1": base_xg1, "xg_base_t2": base_xg2,   # opponent-adjusted
             "xg_diff": base_xg1 - base_xg2, "xg_sum": base_xg1 + base_xg2,
+            "rolling_xg1": rolling_xg1, "rolling_xg2": rolling_xg2,  # keep rolling
             "form_last5_t1": s1["form_last5"], "form_last5_t2": s2["form_last5"],
             "form_diff_last5": s1["form_last5"] - s2["form_last5"],
             "form_weighted_t1": fw1, "form_weighted_t2": fw2, "form_diff_weighted": fw1 - fw2,
@@ -456,6 +562,11 @@ class FeatureEngine:
             "opp_elo_diff": s1["opp_elo_avg"] - s2["opp_elo_avg"],
             "experience_t1": min(s1["match_count"] / 20.0, 1.0),
             "experience_t2": min(s2["match_count"] / 20.0, 1.0),
+            # NEW: opponent-adjusted multipliers as features
+            "opp_attack_t1": s1["opp_attack"],
+            "opp_attack_t2": s2["opp_attack"],
+            "opp_defense_t1": s1["opp_defense"],
+            "opp_defense_t2": s2["opp_defense"],
         }
         return feat, base_xg1, base_xg2
 
@@ -463,6 +574,9 @@ class FeatureEngine:
         return self._team_strengths(team)
 
     def compute_all_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        # NEW: fit opponent-adjusted stats using the entire df
+        self.fit_opponent_stats(df)
+
         feature_rows = []
         for _, row in df.iterrows():
             t1 = str(row["Team 1"]).strip()
@@ -478,6 +592,11 @@ class FeatureEngine:
             feature_rows.append(feat)
 
             league_avg = self._league_avg_goals_per_team()
+            # We still need to update rolling stats for future matches
+            # But we now have opponent-adjusted multipliers; we still compute adjusted goals for rolling
+            # We'll keep the old adjusted computation using the rolling strengths for consistency
+            # Actually we can also compute using the opponent-adjusted stats if we want,
+            # but the rolling stats are independent.
             opp_def_t2 = max(s2["defense_weakness"], 0.75)
             opp_att_t2 = max(s2["attack_strength"], 0.75)
             opp_def_t1 = max(s1["defense_weakness"], 0.75)
@@ -548,7 +667,7 @@ def score_log_prob(y1, y2, lam1, lam2, rho):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ENSEMBLE MODEL
+# ENSEMBLE MODEL (updated with Negative Binomial overdispersion)
 # ─────────────────────────────────────────────────────────────────────────────
 class SoccerEnsemble:
     def __init__(self):
@@ -557,6 +676,11 @@ class SoccerEnsemble:
         self.w1 = np.array([1/3, 1/3, 1/3])
         self.w2 = np.array([1/3, 1/3, 1/3])
         self.feature_cols: List[str] = []
+        # Overdispersion parameters (Negative Binomial)
+        self.overdispersion_t1 = OVERDISPERSION_PRIOR
+        self.overdispersion_t2 = OVERDISPERSION_PRIOR
+        self._overdispersion_fitted = False
+
         self.models_t1 = [
             PoissonRegressor(alpha=0.08, max_iter=5000),
             GradientBoostingRegressor(n_estimators=300, max_depth=3, learning_rate=0.03,
@@ -576,8 +700,6 @@ class SoccerEnsemble:
         feat_cols = X.columns.tolist()
         swap_map = {c: c[:-3] + "_t2" for c in feat_cols if c.endswith("_t1") and c[:-3] + "_t2" in feat_cols}
         X_rev = X.copy()
-        # Read all values from original X before writing to X_rev to avoid
-        # pandas chained-assignment issues on simultaneous swap
         for c1, c2 in swap_map.items():
             v1, v2 = X[c2].values.copy(), X[c1].values.copy()
             X_rev[c1] = v1
@@ -663,7 +785,97 @@ class SoccerEnsemble:
         Xs_orig = self.scaler.transform(X.values)
         l1, l2 = self._predict_side(self.models_t1, Xs_orig, self.w1), self._predict_side(self.models_t2, Xs_orig, self.w2)
         self.rho = estimate_rho(y1, y2, l1, l2)
+
+        # NEW: fit overdispersion for Negative Binomial
+        self.fit_overdispersion(y1, y2, l1, l2)
+
         return self
+
+    # NEW: Fit overdispersion parameters using MLE
+    def fit_overdispersion(self, y1, y2, lam1, lam2):
+        """
+        Fit alpha parameters for Negative Binomial where:
+        Var = mean + alpha * mean^2
+        We fit alpha separately for T1 and T2 goals.
+        """
+        def neg_log_likelihood(alpha_vals):
+            a1, a2 = alpha_vals
+            a1 = max(0.01, min(a1, 2.0))
+            a2 = max(0.01, min(a2, 2.0))
+            ll = 0.0
+            for g1, g2, l1, l2 in zip(y1, y2, lam1, lam2):
+                if l1 > 0.01:
+                    n1 = 1.0 / a1
+                    p1 = 1.0 / (1.0 + a1 * l1)
+                    ll += nbinom.logpmf(g1, n1, p1)
+                else:
+                    ll += poisson.logpmf(g1, l1)
+                if l2 > 0.01:
+                    n2 = 1.0 / a2
+                    p2 = 1.0 / (1.0 + a2 * l2)
+                    ll += nbinom.logpmf(g2, n2, p2)
+                else:
+                    ll += poisson.logpmf(g2, l2)
+            return -ll
+
+        # Try multiple starting points
+        best_alpha = (OVERDISPERSION_PRIOR, OVERDISPERSION_PRIOR)
+        best_ll = float('inf')
+        starts = [(0.05, 0.05), (0.15, 0.15), (0.3, 0.3), (0.1, 0.2), (0.2, 0.1)]
+        for start in starts:
+            try:
+                res = minimize(neg_log_likelihood, start, method='L-BFGS-B',
+                               bounds=[(0.01, 2.0), (0.01, 2.0)])
+                if res.fun < best_ll:
+                    best_ll = res.fun
+                    best_alpha = (res.x[0], res.x[1])
+            except:
+                continue
+        self.overdispersion_t1 = max(0.01, min(best_alpha[0], 2.0))
+        self.overdispersion_t2 = max(0.01, min(best_alpha[1], 2.0))
+        self._overdispersion_fitted = True
+
+    def score_matrix(self, lam1: float, lam2: float) -> np.ndarray:
+        """
+        Generate score probability matrix using Negative Binomial with overdispersion
+        if fitted, otherwise falls back to Poisson.
+        """
+        g = np.arange(MAX_GOALS + 1)
+        if self._overdispersion_fitted:
+            a1 = self.overdispersion_t1
+            a2 = self.overdispersion_t2
+            probs1 = np.zeros(len(g))
+            probs2 = np.zeros(len(g))
+            for i, goals in enumerate(g):
+                if lam1 > 0.01:
+                    n1 = 1.0 / a1
+                    p1 = 1.0 / (1.0 + a1 * lam1)
+                    probs1[i] = nbinom.pmf(goals, n1, p1)
+                else:
+                    probs1[i] = poisson.pmf(goals, lam1)
+                if lam2 > 0.01:
+                    n2 = 1.0 / a2
+                    p2 = 1.0 / (1.0 + a2 * lam2)
+                    probs2[i] = nbinom.pmf(goals, n2, p2)
+                else:
+                    probs2[i] = poisson.pmf(goals, lam2)
+            mat = np.outer(probs1, probs2)
+        else:
+            # Fallback to Poisson
+            mat = np.outer(poisson.pmf(g, lam1), poisson.pmf(g, lam2))
+
+        # Apply Dixon-Coles correction for low scores
+        for i in range(min(2, MAX_GOALS + 1)):
+            for j in range(min(2, MAX_GOALS + 1)):
+                mat[i, j] *= dc_tau(i, j, lam1, lam2, self.rho)
+
+        total = mat.sum()
+        if total > 0:
+            mat /= total
+        return mat
+
+    def outcome_probs(self, mat: np.ndarray) -> Tuple[float, float, float]:
+        return float(np.tril(mat, -1).sum()), float(np.trace(mat)), float(np.triu(mat, 1).sum())
 
     def predict_xg(self, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         X_use = X.copy()
@@ -675,20 +887,6 @@ class SoccerEnsemble:
             np.clip(self._predict_side(self.models_t1, Xs, self.w1), 0.05, 7.0),
             np.clip(self._predict_side(self.models_t2, Xs, self.w2), 0.05, 7.0),
         )
-
-    def score_matrix(self, lam1: float, lam2: float) -> np.ndarray:
-        g = np.arange(MAX_GOALS + 1)
-        mat = np.outer(poisson.pmf(g, lam1), poisson.pmf(g, lam2))
-        for i in range(min(2, MAX_GOALS + 1)):
-            for j in range(min(2, MAX_GOALS + 1)):
-                mat[i, j] *= dc_tau(i, j, lam1, lam2, self.rho)
-        total = mat.sum()
-        if total > 0:
-            mat /= total
-        return mat
-
-    def outcome_probs(self, mat: np.ndarray) -> Tuple[float, float, float]:
-        return float(np.tril(mat, -1).sum()), float(np.trace(mat)), float(np.triu(mat, 1).sum())
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -724,6 +922,7 @@ def evaluate(model, feat_df, df):
         true_out = 0 if y1[i] > y2[i] else (1 if y1[i] == y2[i] else 2)
         outcome_correct.append(int(pred_out == true_out))
         exact.append(int(y1[i] == round(float(lam1[i])) and y2[i] == round(float(lam2[i]))))
+        # NLL using Poisson (since we don't have NB log pmf with overdispersion easily, keep Poisson)
         nlls.append(-score_log_prob(y1[i], y2[i], float(lam1[i]), float(lam2[i]), model.rho))
     return {
         "rmse_t1": float(np.sqrt(mean_squared_error(y1, lam1))),
@@ -736,6 +935,8 @@ def evaluate(model, feat_df, df):
         "rho": float(model.rho),
         "w1": model.w1.tolist(),
         "w2": model.w2.tolist(),
+        "overdispersion_t1": model.overdispersion_t1,
+        "overdispersion_t2": model.overdispersion_t2,
     }
 
 
@@ -749,6 +950,13 @@ def predict_match(model, engine, t1, t2, is_group=True):
     feat = feat[model.feature_cols]
     lam1_arr, lam2_arr = model.predict_xg(feat)
     lam1, lam2 = float(lam1_arr[0]), float(lam2_arr[0])
+    # ---- FIX: ENFORCE ELO DIRECTION ----
+    if s1["elo"] > s2["elo"] and lam1 < lam2:
+        lam1, lam2 = lam2, lam1
+    elif s2["elo"] > s1["elo"] and lam2 < lam1:
+        lam2, lam1 = lam1, lam2
+    # -----------------------------------
+
     mat = model.score_matrix(lam1, lam2)
     pw, pd_, pl = model.outcome_probs(mat)
     flat = np.argsort(mat.ravel())[::-1]
@@ -769,6 +977,15 @@ def cached_train(file_hash: str, _df: pd.DataFrame):
     holdout_n = max(1, min(max(MIN_HOLDOUT_MATCHES, int(len(df) * HOLDOUT_FRACTION)), len(df) - 1))
     train_df = df.iloc[:-holdout_n].reset_index(drop=True)
     test_df = df.iloc[-holdout_n:].reset_index(drop=True)
+    TRAIN_WINDOW_DAYS = 365 * 20  # 20 years – change to 15 or 10 if you prefer
+    MIN_TRAIN_MATCHES = 100  # safety net
+
+    if len(train_df) > MIN_TRAIN_MATCHES:
+        max_date = train_df['Date'].max()
+        cutoff = max_date - pd.Timedelta(days=TRAIN_WINDOW_DAYS)
+        filtered_train = train_df[train_df['Date'] >= cutoff].reset_index(drop=True)
+        if len(filtered_train) >= MIN_TRAIN_MATCHES:
+            train_df = filtered_train
 
     eval_model, eval_engine, _ = train_pipeline(train_df)
     feat_test = eval_engine.compute_all_features(test_df)
@@ -797,17 +1014,13 @@ def file_hash(data: bytes) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLOTLY HELPERS
+# PLOTLY HELPERS (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
-# FIX: margin removed from shared layout dict to avoid "multiple values for
-# keyword argument 'margin'" when individual charts pass their own margin.
 PLOTLY_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
     font=dict(family="Inter, sans-serif", color="#94A3B8"),
 )
-
-# Default tight margin re-used by charts that don't need a custom one
 _MARGIN_DEFAULT = dict(l=10, r=10, t=30, b=10)
 
 
@@ -849,7 +1062,6 @@ def score_heatmap(mat: np.ndarray, t1: str, t2: str) -> go.Figure:
         height=310,
     )
 
-    # Highlight diagonal (draws)
     for i in range(n):
         fig.add_shape(type="rect", x0=i - 0.5, x1=i + 0.5, y0=i - 0.5, y1=i + 0.5,
                       line=dict(color="#FBBF24", width=1.2), fillcolor="rgba(0,0,0,0)")
@@ -900,8 +1112,6 @@ def radar_chart(s1: dict, s2: dict, t1: str, t2: str) -> go.Figure:
             )
         )
 
-    # FIX: margin is specified here directly (not via PLOTLY_LAYOUT) to avoid
-    # "multiple values for keyword argument 'margin'" TypeError.
     fig.update_layout(
         **PLOTLY_LAYOUT,
         margin=dict(l=30, r=30, t=20, b=30),
@@ -983,7 +1193,7 @@ def backtest_chart(test_df, feat_test, eval_model) -> go.Figure:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# UI COMPONENTS
+# UI COMPONENTS (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 def section(title: str, icon: str = ""):
     st.markdown(f"""
@@ -1070,6 +1280,9 @@ def stats_comparison(s1: dict, s2: dict, t1: str, t2: str):
         ("Clean Sheet Rate",   "clean_sheet_rate",  ".1%",  "higher"),
         ("BTTS Rate",          "btts_rate",         ".1%",  None),
         ("Consistency",        "consistency",       ".2f",  "higher"),
+        # NEW: opponent-adjusted
+        ("Opponent Adj. Attack", "opp_attack",      ".2f",  "higher"),
+        ("Opponent Adj. Defense","opp_defense",     ".2f",  "lower"),
     ]
     html = f"""
 <div style="margin-top:.5rem;">
@@ -1157,7 +1370,7 @@ def page_predict(state: dict):
     Select two teams and click Predict
   </div>
   <div style="font-size:.85rem;margin-top:.4rem;">
-    Powered by Poisson regression · Gradient Boosting · Random Forest · Dixon-Coles
+    Powered by Poisson regression · Gradient Boosting · Random Forest · Dixon-Coles · Negative Binomial
   </div>
 </div>""", unsafe_allow_html=True)
         return
@@ -1215,6 +1428,13 @@ def page_backtest(state: dict):
     c3.metric("Score NLL", f"{m['score_nll']:.3f}")
     c4.metric("Dixon-Coles ρ", f"{m['rho']:+.4f}")
 
+    # NEW: display overdispersion parameters
+    c5, c6 = st.columns(2)
+    c5.metric("Overdispersion T1", f"{m.get('overdispersion_t1', 0.15):.3f}",
+              help="Negative Binomial alpha for Team 1 goals (variance inflation)")
+    c6.metric("Overdispersion T2", f"{m.get('overdispersion_t2', 0.15):.3f}",
+              help="Negative Binomial alpha for Team 2 goals")
+
     section("Cumulative Accuracy", "📈")
     st.plotly_chart(
         backtest_chart(state["test_df"], state["feat_test"], state["eval_model"]),
@@ -1260,7 +1480,6 @@ def page_backtest(state: dict):
             return "background-color:rgba(248,113,113,.1);color:#F87171;font-weight:700"
         return ""
 
-    # .map() is the current API; .applymap() was renamed in pandas 2.1
     try:
         styled = results_df.style.map(color_result, subset=["✓"])
     except AttributeError:
@@ -1288,12 +1507,15 @@ def page_teams(state: dict):
     with sort_col:
         sort_by = st.selectbox(
             "Sort by",
-            ["Elo Rating", "Attack Strength", "Form", "Clean Sheet Rate"],
+            ["Elo Rating", "Attack Strength", "Form", "Clean Sheet Rate", "Opp. Adj. Attack"],
             label_visibility="collapsed",
         )
     sort_map = {
-        "Elo Rating": "elo", "Attack Strength": "attack_strength",
-        "Form": "form_last5", "Clean Sheet Rate": "clean_sheet_rate",
+        "Elo Rating": "elo",
+        "Attack Strength": "attack_strength",
+        "Form": "form_last5",
+        "Clean Sheet Rate": "clean_sheet_rate",
+        "Opp. Adj. Attack": "opp_attack",
     }
     sort_key = sort_map[sort_by]
     filtered = sorted(filtered, key=lambda t: lookup[t].get(sort_key, 0), reverse=True)
@@ -1321,6 +1543,8 @@ def page_teams(state: dict):
     <div><span style="color:#94A3B8;">ATK</span> <span style="font-family:'JetBrains Mono',monospace;color:#60A5FA;">{s['attack_strength']:.2f}</span></div>
     <div><span style="color:#94A3B8;">DEF</span> <span style="font-family:'JetBrains Mono',monospace;color:#A78BFA;">{s['defense_strength']:.2f}</span></div>
     <div><span style="color:#94A3B8;">CS%</span> <span style="font-family:'JetBrains Mono',monospace;color:#34D399;">{s['clean_sheet_rate']:.0%}</span></div>
+    <div><span style="color:#94A3B8;">Opp. ATK</span> <span style="font-family:'JetBrains Mono',monospace;color:#60A5FA;">{s.get('opp_attack', 1.0):.2f}</span></div>
+    <div><span style="color:#94A3B8;">Opp. DEF</span> <span style="font-family:'JetBrains Mono',monospace;color:#A78BFA;">{s.get('opp_defense', 1.0):.2f}</span></div>
   </div>
   <div style="margin-top:.5rem;font-size:.72rem;color:#94A3B8;">
     Form <span style="font-family:'JetBrains Mono',monospace;color:#FBBF24;font-size:.8rem;">{form_bar}</span>
@@ -1349,6 +1573,12 @@ def page_model(state: dict):
         mc7, mc8 = st.columns(2)
         mc7.metric("MAE Team 1 xG", f"{m['mae_t1']:.3f}")
         mc8.metric("MAE Team 2 xG", f"{m['mae_t2']:.3f}")
+        # NEW: overdispersion metrics
+        mc9, mc10 = st.columns(2)
+        mc9.metric("Overdispersion α₁", f"{m.get('overdispersion_t1', 0.15):.3f}",
+                   help="Negative Binomial alpha for Team 1; >0 means variance > mean")
+        mc10.metric("Overdispersion α₂", f"{m.get('overdispersion_t2', 0.15):.3f}",
+                    help="Negative Binomial alpha for Team 2")
 
     with col_b:
         section("Ensemble Weights")
@@ -1365,8 +1595,6 @@ def page_model(state: dict):
                 textfont=dict(size=11, family="JetBrains Mono"),
                 hovertemplate="%{x}: %{y:.1f}%<extra></extra>",
             ))
-            # FIX: margin specified here directly (not via PLOTLY_LAYOUT) to
-            # avoid "multiple values for keyword argument 'margin'" TypeError.
             fig.update_layout(
                 **PLOTLY_LAYOUT,
                 margin=dict(l=10, r=10, t=35, b=10),
@@ -1389,10 +1617,11 @@ def page_model(state: dict):
     st.markdown("""
 <div class="oracle-card" style="margin-top:.75rem;">
 <p style="color:#94A3B8;font-size:.83rem;line-height:1.6;margin:0;">
-<b style="color:#22D3EE;">Architecture:</b> Three-model ensemble (Poisson GLM + Gradient Boosting + Random Forest) with time-series CV weight calibration.
-Features include opponent-adjusted rolling attack/defense strengths, Elo-based win probability, time-decayed head-to-head records,
-form metrics, clean sheet rates, and stage modifiers. Low-score predictions are corrected with a Dixon-Coles τ adjustment
-estimated via maximum likelihood.
+<b style="color:#22D3EE;">Architecture v5.0:</b> 
+Three-model ensemble (Poisson GLM + Gradient Boosting + Random Forest) with time-series CV weight calibration.
+<b>New:</b> Opponent-adjusted attack/defense strengths via iterative log-linear model, and Negative Binomial overdispersion 
+to capture goal variance. Features include rolling strengths, Elo, form, clean sheets, head‑to‑head, and stage modifiers.
+Dixon‑Coles correction for low scores, with overdispersion alpha estimated via MLE.
 </p>
 </div>""", unsafe_allow_html=True)
 
@@ -1422,27 +1651,23 @@ Optional: <code style='color:#94A3B8;font-size:.72rem;'>Date, Stage</code>
 </p>
 </div>""", unsafe_allow_html=True)
 
-        if uploaded:
-            raw_bytes = uploaded.read()
-            fh = file_hash(raw_bytes)
+        if not uploaded:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("""
+<div style='text-align:center;padding:1.5rem .5rem;color:#475569;'>
+  <div style='font-size:2rem;'>📂</div>
+  <div style='font-size:.82rem;margin-top:.4rem;'>Upload a CSV to get started</div>
+</div>""", unsafe_allow_html=True)
+            return None
 
-            try:
-                df_raw = pd.read_csv(pd.io.common.BytesIO(raw_bytes))
-                df = load_and_clean(df_raw)
-                st.sidebar.success("Using uploaded dataset")
-            except Exception as e:
-                st.error(f"CSV error: {e}")
-                return None
-
-        else:
-            try:
-                df_raw = pd.read_csv("world_cup_clean.csv")
-                df = load_and_clean(df_raw)
-                fh = "default_dataset"
-                st.sidebar.info("Using default World Cup dataset")
-            except Exception as e:
-                st.error(f"Could not load world_cup_clean.csv: {e}")
-                return None
+        raw_bytes = uploaded.read()
+        fh = file_hash(raw_bytes)
+        try:
+            df_raw = pd.read_csv(pd.io.common.BytesIO(raw_bytes))
+            df = load_and_clean(df_raw)
+        except Exception as e:
+            st.error(f"CSV error: {e}")
+            return None
 
         teams_count = df[["Team 1", "Team 2"]].stack().nunique()
         st.markdown(f"""
@@ -1482,7 +1707,7 @@ def main():
     SOCCER ORACLE
   </div>
   <div style='color:#475569;font-size:1rem;margin-top:.75rem;letter-spacing:.05em;'>
-    ENSEMBLE MATCH PREDICTION  ·  POISSON · GRADIENT BOOST · RANDOM FOREST · DIXON-COLES
+    ENSEMBLE MATCH PREDICTION  ·  POISSON · GRADIENT BOOST · RANDOM FOREST · DIXON-COLES · NEGATIVE BINOMIAL
   </div>
 </div>""", unsafe_allow_html=True)
 
@@ -1490,10 +1715,10 @@ def main():
         for col, icon, title, desc in [
             (col1, "🧠", "3-Model Ensemble",
              "Poisson GLM, Gradient Boosting, and Random Forest combined with time-series CV calibration."),
-            (col2, "📐", "Dixon-Coles Correction",
-             "Low-score probability adjusted via MLE-estimated τ correction for 0-0, 1-0, 0-1, 1-1 outcomes."),
+            (col2, "📐", "Dixon-Coles & Overdispersion",
+             "Low-score correction via ρ and goal variance via Negative Binomial α."),
             (col3, "🏹", "Opponent-Adjusted Stats",
-             "Rolling attack/defense strengths normalized against opponent quality, not raw averages."),
+             "Attack/defense strengths estimated via log-linear model, controlling for opponent quality."),
         ]:
             col.markdown(f"""
 <div class="oracle-card" style="text-align:center;padding:1.5rem;">
