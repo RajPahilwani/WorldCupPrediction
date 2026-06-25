@@ -1,0 +1,238 @@
+Date,Match #,Stage,Team 1,Team 2,Elo1,Elo2,Goals1,Goals2
+6/12/2014,1,Group Stage,Brazil,Croatia,2113,1787,3,1
+6/13/2014,2,Group Stage,Mexico,Cameroon,1756,1732,1,0
+6/13/2014,3,Group Stage,Netherlands,Spain,2023,2074,5,1
+6/13/2014,4,Group Stage,Chile,Australia,1797,1769,3,1
+6/14/2014,5,Group Stage,Colombia,Greece,1898,1742,3,0
+6/14/2014,6,Group Stage,Uruguay,Costa Rica,1910,1726,1,3
+6/14/2014,7,Group Stage,Italy,England,1882,1905,2,1
+6/14/2014,8,Group Stage,Ivory Coast,Japan,1786,1765,2,1
+6/15/2014,9,Group Stage,Switzerland,Ecuador,1768,1854,2,1
+6/15/2014,10,Group Stage,France,Honduras,1859,1629,3,0
+6/15/2014,11,Group Stage,Argentina,Bosnia-Herzegovina,2048,1751,2,1
+6/16/2014,12,Group Stage,Germany,Portugal,2014,1880,4,0
+6/16/2014,13,Group Stage,Iran,Nigeria,1785,1674,0,0
+6/16/2014,14,Group Stage,USA,Ghana,1722,1711,2,1
+6/17/2014,15,Group Stage,Belgium,Algeria,1844,1648,2,1
+6/17/2014,16,Group Stage,Brazil,Mexico,2113,1756,0,0
+6/17/2014,17,Group Stage,Russia,South Korea,1809,1765,1,1
+6/18/2014,18,Group Stage,Netherlands,Australia,2023,1769,3,2
+6/18/2014,19,Group Stage,Chile,Spain,1797,2074,2,0
+6/18/2014,20,Group Stage,Croatia,Cameroon,1787,1732,4,0
+6/19/2014,21,Group Stage,Colombia,Ivory Coast,1898,1786,2,1
+6/19/2014,22,Group Stage,Uruguay,England,1910,1905,2,1
+6/19/2014,23,Group Stage,Japan,Greece,1765,1742,0,0
+6/20/2014,24,Group Stage,Costa Rica,Italy,1726,1882,1,0
+6/20/2014,25,Group Stage,France,Switzerland,1859,1768,5,2
+6/20/2014,26,Group Stage,Ecuador,Honduras,1854,1629,2,1
+6/21/2014,27,Group Stage,Argentina,Iran,2048,1785,1,0
+6/21/2014,28,Group Stage,Germany,Ghana,2014,1711,2,2
+6/21/2014,29,Group Stage,Nigeria,Bosnia-Herzegovina,1674,1751,1,0
+6/22/2014,30,Group Stage,Belgium,Russia,1844,1809,1,0
+6/22/2014,31,Group Stage,Algeria,South Korea,1648,1765,4,2
+6/22/2014,32,Group Stage,USA,Portugal,1722,1880,2,2
+6/23/2014,33,Group Stage,Netherlands,Chile,2023,1797,2,0
+6/23/2014,34,Group Stage,Spain,Australia,2074,1769,3,0
+6/23/2014,35,Group Stage,Mexico,Croatia,1756,1787,3,1
+6/23/2014,36,Group Stage,Brazil,Cameroon,2113,1732,4,1
+6/24/2014,37,Group Stage,Uruguay,Italy,1910,1882,1,0
+6/24/2014,38,Group Stage,Costa Rica,England,1726,1905,0,0
+6/24/2014,39,Group Stage,Colombia,Japan,1898,1765,4,1
+6/24/2014,40,Group Stage,Greece,Ivory Coast,1742,1786,2,1
+6/25/2014,41,Group Stage,Argentina,Nigeria,2048,1674,3,2
+6/25/2014,42,Group Stage,Bosnia-Herzegovina,Iran,1751,1785,3,1
+6/25/2014,43,Group Stage,Ecuador,France,1854,1859,0,0
+6/25/2014,44,Group Stage,Switzerland,Honduras,1768,1629,3,0
+6/26/2014,45,Group Stage,Germany,USA,2014,1722,1,0
+6/26/2014,46,Group Stage,Portugal,Ghana,1880,1711,2,1
+6/26/2014,47,Group Stage,South Korea,Belgium,1765,1844,0,1
+6/26/2014,48,Group Stage,Algeria,Russia,1648,1809,1,1
+6/28/2014,49,Round of 16,Brazil,Chile,2113,1797,1,1
+6/28/2014,50,Round of 16,Colombia,Uruguay,1898,1910,2,0
+6/29/2014,51,Round of 16,Netherlands,Mexico,2023,1756,2,1
+6/29/2014,52,Round of 16,Costa Rica,Greece,1726,1742,1,1
+6/30/2014,53,Round of 16,France,Nigeria,1859,1674,2,0
+6/30/2014,54,Round of 16,Germany,Algeria,2014,1648,2,1
+7/1/2014,55,Round of 16,Argentina,Switzerland,2048,1768,1,0
+7/1/2014,56,Round of 16,Belgium,USA,1844,1722,2,1
+7/4/2014,57,Quarter-finals,Germany,France,2014,1859,1,0
+7/4/2014,58,Quarter-finals,Brazil,Colombia,2113,1898,2,1
+7/5/2014,59,Quarter-finals,Argentina,Belgium,2048,1844,1,0
+7/5/2014,60,Quarter-finals,Netherlands,Costa Rica,2023,1726,0,0
+7/8/2014,61,Semi-finals,Germany,Brazil,2014,2113,7,1
+7/9/2014,62,Semi-finals,Argentina,Netherlands,2048,2023,0,0
+7/12/2014,63,3rd Place Final,Netherlands,Brazil,2023,2113,3,0
+7/13/2014,64,Final,Germany,Argentina,2014,2048,1,0
+6/14/2018,1,Group Stage,Russia,Saudi Arabia,1732.65,1653.51,5,0
+6/15/2018,2,Group Stage,Egypt,Uruguay,1695.34,1814.03,0,1
+6/15/2018,3,Group Stage,Morocco,Iran,1732.19,1808.95,0,1
+6/15/2018,4,Group Stage,Portugal,Spain,1883.41,1975.34,3,3
+6/16/2018,5,Group Stage,Croatia,Nigeria,1816.65,1705.43,2,0
+6/16/2018,6,Group Stage,France,Australia,1937.24,1733.48,2,1
+6/16/2018,7,Group Stage,Argentina,Iceland,1920.86,1708.68,1,1
+6/16/2018,8,Group Stage,Peru,Denmark,1854.2,1755.69,0,1
+6/17/2018,9,Group Stage,Costa Rica,Serbia,1723.55,1725.17,0,1
+6/17/2018,10,Group Stage,Brazil,Switzerland,2032.96,1825.96,1,1
+6/17/2018,11,Group Stage,Germany,Mexico,1958.01,1834.09,0,1
+6/18/2018,12,Group Stage,Sweden,South Korea,1739.75,1748.51,1,0
+6/18/2018,13,Group Stage,Tunisia,England,1691.19,1906.22,1,2
+6/18/2018,14,Group Stage,Belgium,Panama,1890.04,1682.27,3,0
+6/19/2018,15,Group Stage,Poland,Senegal,1795.87,1752.17,1,2
+6/19/2018,16,Group Stage,Russia,Egypt,1732.65,1695.34,3,1
+6/19/2018,17,Group Stage,Colombia,Japan,1865.61,1747.58,1,2
+6/20/2018,18,Group Stage,Portugal,Morocco,1883.41,1732.19,1,0
+6/20/2018,19,Group Stage,Uruguay,Saudi Arabia,1814.03,1653.51,1,0
+6/20/2018,20,Group Stage,Iran,Spain,1808.95,1975.34,0,1
+6/21/2018,21,Group Stage,Argentina,Croatia,1920.86,1816.65,0,3
+6/21/2018,22,Group Stage,France,Peru,1937.24,1854.2,1,0
+6/21/2018,23,Group Stage,Denmark,Australia,1755.69,1733.48,1,1
+6/22/2018,24,Group Stage,Brazil,Costa Rica,2032.96,1723.55,2,0
+6/22/2018,25,Group Stage,Nigeria,Iceland,1705.43,1708.68,2,0
+6/22/2018,26,Group Stage,Serbia,Switzerland,1725.17,1825.96,1,2
+6/23/2018,27,Group Stage,Belgium,Tunisia,1890.04,1691.19,5,2
+6/23/2018,28,Group Stage,Germany,Sweden,1958.01,1739.75,2,1
+6/23/2018,29,Group Stage,South Korea,Mexico,1748.51,1834.09,1,2
+6/24/2018,30,Group Stage,Japan,Senegal,1747.58,1752.17,2,2
+6/24/2018,31,Group Stage,Poland,Colombia,1795.87,1865.61,0,3
+6/24/2018,32,Group Stage,England,Panama,1906.22,1682.27,6,1
+6/25/2018,33,Group Stage,Spain,Morocco,1975.34,1732.19,2,2
+6/25/2018,34,Group Stage,Iran,Portugal,1808.95,1883.41,1,1
+6/25/2018,35,Group Stage,Saudi Arabia,Egypt,1653.51,1695.34,2,1
+6/25/2018,36,Group Stage,Uruguay,Russia,1814.03,1732.65,3,0
+6/26/2018,37,Group Stage,Iceland,Croatia,1708.68,1816.65,1,2
+6/26/2018,38,Group Stage,Denmark,France,1755.69,1937.24,0,0
+6/26/2018,39,Group Stage,Nigeria,Argentina,1705.43,1920.86,1,2
+6/26/2018,40,Group Stage,Australia,Peru,1733.48,1854.2,0,2
+6/27/2018,41,Group Stage,Serbia,Brazil,1725.17,2032.96,0,2
+6/27/2018,42,Group Stage,South Korea,Germany,1748.51,1958.01,2,0
+6/27/2018,43,Group Stage,Switzerland,Costa Rica,1825.96,1723.55,2,2
+6/27/2018,44,Group Stage,Mexico,Sweden,1834.09,1739.75,0,3
+6/28/2018,45,Group Stage,Japan,Poland,1747.58,1795.87,0,1
+6/28/2018,46,Group Stage,Panama,Tunisia,1682.27,1691.19,1,2
+6/28/2018,47,Group Stage,Senegal,Colombia,1752.17,1865.61,0,1
+6/28/2018,48,Group Stage,England,Belgium,1906.22,1890.04,0,1
+6/30/2018,49,Round of 16,France,Argentina,1937.24,1920.86,4,3
+6/30/2018,50,Round of 16,Uruguay,Portugal,1814.03,1883.41,2,1
+7/1/2018,51,Round of 16,Spain,Russia,1975.34,1732.65,1,1
+7/1/2018,52,Round of 16,Croatia,Denmark,1816.65,1755.69,1,1
+7/2/2018,53,Round of 16,Belgium,Japan,1890.04,1747.58,3,2
+7/2/2018,54,Round of 16,Brazil,Mexico,2032.96,1834.09,2,0
+7/3/2018,55,Round of 16,Colombia,England,1865.61,1906.22,1,1
+7/3/2018,56,Round of 16,Sweden,Switzerland,1739.75,1825.96,1,0
+7/6/2018,57,Quarter-finals,Brazil,Belgium,2032.96,1890.04,1,2
+7/6/2018,58,Quarter-finals,Uruguay,France,1814.03,1937.24,0,2
+7/7/2018,59,Quarter-finals,Sweden,England,1739.75,1906.22,0,2
+7/7/2018,60,Quarter-finals,Russia,Croatia,1732.65,1816.65,2,2
+7/10/2018,61,Semi-finals,France,Belgium,1937.24,1890.04,1,0
+7/11/2018,62,Semi-finals,Croatia,England,1816.65,1906.22,2,1
+7/14/2018,63,3rd Place Final,Belgium,England,1890.04,1906.22,2,0
+7/15/2018,64,Final,France,Croatia,1937.24,1816.65,4,2
+########,1,Group Stage,Qatar,Ecuador,1680,1832,0,2
+########,2,Group Stage,England,Iran,1919,1798,6,2
+########,3,Group Stage,Senegal,Netherlands,1684,2040,0,2
+########,4,Group Stage,USA,Wales,1796,1789,1,1
+########,5,Group Stage,Argentina,Saudi Arabia,2143,1636,1,2
+########,6,Group Stage,Denmark,Tunisia,1971,1705,0,0
+########,7,Group Stage,Mexico,Poland,1808,1813,0,0
+########,8,Group Stage,France,Australia,2004,1720,4,1
+########,9,Group Stage,Morocco,Croatia,1764,1926,0,0
+########,10,Group Stage,Germany,Japan,1962,1788,1,2
+########,11,Group Stage,Spain,Costa Rica,2049,1743,7,0
+########,12,Group Stage,Belgium,Canada,2006,1775,1,0
+########,13,Group Stage,Switzerland,Cameroon,1901,1607,1,0
+########,14,Group Stage,Uruguay,South Korea,1935,1786,0,0
+########,15,Group Stage,Portugal,Ghana,2005,1564,3,2
+########,16,Group Stage,Brazil,Serbia,2169,1898,2,0
+########,17,Group Stage,Wales,Iran,1789,1798,0,2
+########,18,Group Stage,Qatar,Senegal,1680,1684,1,3
+########,19,Group Stage,Netherlands,Ecuador,2040,1832,1,1
+########,20,Group Stage,England,USA,1919,1796,0,0
+########,21,Group Stage,Tunisia,Australia,1705,1720,0,1
+########,22,Group Stage,Poland,Saudi Arabia,1813,1636,2,0
+########,23,Group Stage,France,Denmark,2004,1971,2,1
+########,24,Group Stage,Argentina,Mexico,2143,1808,2,0
+########,25,Group Stage,Japan,Costa Rica,1788,1743,0,1
+########,26,Group Stage,Belgium,Morocco,2006,1764,0,2
+########,27,Group Stage,Croatia,Canada,1926,1775,4,1
+########,28,Group Stage,Spain,Germany,2049,1962,1,1
+########,29,Group Stage,Cameroon,Serbia,1607,1898,3,3
+########,30,Group Stage,South Korea,Ghana,1786,1564,2,3
+########,31,Group Stage,Brazil,Switzerland,2169,1901,1,0
+########,32,Group Stage,Portugal,Uruguay,2005,1935,2,0
+########,33,Group Stage,Ecuador,Senegal,1832,1684,1,2
+########,34,Group Stage,Netherlands,Qatar,2040,1680,2,0
+########,35,Group Stage,Iran,USA,1798,1796,0,1
+########,36,Group Stage,Wales,England,1789,1919,0,3
+########,37,Group Stage,Tunisia,France,1705,2004,1,0
+########,38,Group Stage,Australia,Denmark,1720,1971,1,0
+########,39,Group Stage,Poland,Argentina,1813,2143,0,2
+########,40,Group Stage,Saudi Arabia,Mexico,1636,1808,1,2
+12/1/2022,41,Group Stage,Croatia,Belgium,1926,2006,0,0
+12/1/2022,42,Group Stage,Canada,Morocco,1775,1764,1,2
+12/1/2022,43,Group Stage,Japan,Spain,1788,2049,2,1
+12/1/2022,44,Group Stage,Costa Rica,Germany,1743,1962,2,4
+12/2/2022,45,Group Stage,Ghana,Uruguay,1564,1935,0,2
+12/2/2022,46,Group Stage,South Korea,Portugal,1786,2005,2,1
+12/2/2022,47,Group Stage,Serbia,Switzerland,1898,1901,2,3
+12/2/2022,48,Group Stage,Cameroon,Brazil,1607,2169,1,0
+12/3/2022,49,Round of 16,Netherlands,USA,2040,1796,3,1
+12/3/2022,50,Round of 16,Argentina,Australia,2143,1720,2,1
+12/4/2022,51,Round of 16,France,Poland,2004,1813,3,1
+12/4/2022,52,Round of 16,England,Senegal,1919,1684,3,0
+12/5/2022,53,Round of 16,Japan,Croatia,1788,1926,1,1
+12/5/2022,54,Round of 16,Brazil,South Korea,2169,1786,4,1
+12/6/2022,55,Round of 16,Morocco,Spain,1764,2049,0,0
+12/6/2022,56,Round of 16,Portugal,Switzerland,2005,1901,6,1
+12/9/2022,57,Quarter-finals,Croatia,Brazil,1926,2169,1,1
+12/9/2022,58,Quarter-finals,Netherlands,Argentina,2040,2143,2,2
+########,59,Quarter-finals,Morocco,Portugal,1764,2005,1,0
+########,60,Quarter-finals,England,France,1919,2004,1,2
+########,61,Semi-finals,Argentina,Croatia,2143,1926,3,0
+########,62,Semi-finals,France,Morocco,2004,1764,2,0
+########,63,3rd Place Final,Croatia,Morocco,1926,1764,2,1
+########,64,Final,Argentina,France,2143,2004,3,3
+6/11/2026,1,Group A,Mexico,South Africa,1721.78,1418.21,2,0
+6/11/2026,2,Group A,South Korea,Czechia,1591.75,1481.49,2,1
+6/12/2026,3,Group B,Canada,Bosnia-Herzegovina,1572.13,1381.18,1,1
+6/12/2026,4,Group D,USA,Paraguay,1709.59,1517.39,4,1
+6/13/2026,5,Group B,Qatar,Switzerland,1438.82,1654.94,1,1
+6/13/2026,6,Group C,Brazil,Morocco,1772.01,1769.98,1,1
+6/13/2026,7,Group C,Haiti,Scotland,1271,1504.41,0,3
+6/13/2026,8,Group D,Australia,Turkiye,1584.55,1550.13,2,0
+6/14/2026,9,Group E,Germany,Curacao,1760.46,1299.41,7,1
+6/14/2026,10,Group F,Netherlands,Japan,1764.4,1681.26,2,2
+6/14/2026,11,Group E,Cote d'Ivoire,Ecuador,1551.71,1558.35,1,0
+6/14/2026,12,Group F,Sweden,Tunisia,1517.99,1437.69,5,1
+6/15/2026,13,Group H,Spain,Cabo Verde,1864.32,1401.77,0,0
+6/15/2026,14,Group G,Belgium,Egypt,1727.88,1583.37,1,1
+6/15/2026,15,Group H,Saudi Arabia,Uruguay,1426.71,1649.96,1,1
+6/15/2026,16,Group G,IR Iran,New Zealand,1611.18,1277.34,2,2
+6/16/2026,17,Group I,France,Senegal,1887.11,1667.66,3,1
+6/16/2026,18,Group I,Iraq,Norway,1426.53,1577.18,1,4
+6/16/2026,19,Group J,Argentina,Algeria,1889.06,1559.24,3,0
+6/16/2026,20,Group J,Austria,Jordan,1612.86,1372.29,3,1
+6/17/2026,21,Group K,Portugal,Congo DR,1755.09,1487.18,1,1
+6/17/2026,22,Group L,England,Croatia,1847.68,1695.21,4,2
+6/17/2026,23,Group L,Ghana,Panama,1380.71,1505.33,1,0
+6/17/2026,24,Group K,Uzbekistan,Colombia,1444.48,1712.6,1,3
+6/18/2026,25,Group A,Czechia,South Africa,1481.49,1418.21,1,1
+6/18/2026,26,Group B,Switzerland,Bosnia-Herzegovina,1654.94,1381.18,4,1
+6/18/2026,27,Group B,Canada,Qatar,1572.13,1438.82,6,0
+6/18/2026,28,Group A,Mexico,South Korea,1721.78,1591.75,1,0
+6/19/2026,29,Group D,USA,Australia,1709.59,1584.55,2,0
+6/19/2026,30,Group C,Scotland,Morocco,1504.41,1769.98,0,1
+6/19/2026,31,Group C,Brazil,Haiti,1772.01,1271,3,0
+6/19/2026,32,Group D,Turkiye,Paraguay,1550.13,1517.39,0,1
+6/20/2026,33,Group F,Netherlands,Sweden,1764.4,1517.99,5,1
+6/20/2026,34,Group E,Germany,Cote d'Ivoire,1760.46,1551.71,2,1
+6/20/2026,35,Group E,Ecuador,Curacao,1558.35,1299.41,0,0
+6/20/2026,36,Group F,Tunisia,Japan,1437.69,1681.26,0,4
+6/21/2026,37,Group H,Spain,Saudi Arabia,1864.32,1426.71,4,0
+6/21/2026,38,Group G,Belgium,IR Iran,1727.88,1611.18,0,0
+6/21/2026,39,Group H,Uruguay,Cabo Verde,1649.96,1401.77,2,2
+6/21/2026,40,Group G,New Zealand,Egypt,1277.34,1583.37,1,3
+6/22/2026,41,Group J,Argentina,Austria,1889.06,1612.86,2,0
+6/22/2026,42,Group I,France,Iraq,1887.11,1426.53,3,0
+6/22/2026,43,Group I,Norway,Senegal,1577.18,1667.66,3,2
+6/22/2026,44,Group J,Jordan,Algeria,1372.29,1559.24,1,2
+6/23/2026,45,Group K,Portugal,Uzbekistan,1755.09,1444.48,5,0

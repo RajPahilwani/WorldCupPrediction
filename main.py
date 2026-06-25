@@ -800,6 +800,23 @@ def main():
     console.print()
     with console.status("[cyan]Loading dataset…[/cyan]"):
         df     = load_data(DATA_PATH)
+        df_rev = df.copy()
+
+        swap_cols = [
+            ("Team 1", "Team 2"),
+            ("Elo1", "Elo2"),
+            ("Attack_Rating_T1", "Attack_Rating_T2"),
+            ("Defense_Rating_T1", "Defense_Rating_T2"),
+            ("Form_Last5_T1", "Form_Last5_T2"),
+            ("Form_Weighted_T1", "Form_Weighted_T2"),
+            ("Goals1", "Goals2")
+        ]
+
+        for a, b in swap_cols:
+            df_rev[a] = df[b]
+            df_rev[b] = df[a]
+
+        df = pd.concat([df, df_rev], ignore_index=True)
         lookup = build_team_lookup(df)
         X      = engineer_features(df)
         y1     = df["Goals1"].values.astype(float)
