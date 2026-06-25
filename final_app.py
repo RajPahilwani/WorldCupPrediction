@@ -1618,7 +1618,7 @@ def render_sidebar() -> Optional[pd.DataFrame]:
     with st.sidebar:
         st.markdown("""
 <div class="sidebar-logo">
-  <div class="sidebar-logo-text">⚽ SOCCER ORACLE</div>
+  <div class="sidebar-logo-text">⚽ DELPHI </div>
   <div class="sidebar-logo-sub">Advanced Match Prediction</div>
 </div>
 """, unsafe_allow_html=True)
