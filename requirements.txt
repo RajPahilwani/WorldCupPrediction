@@ -4,6 +4,6 @@ collections
 typing
 numpy
 pandas
-plotly
+plotly.py
 scipy
 scikit-learn
