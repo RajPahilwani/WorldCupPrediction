@@ -1422,23 +1422,27 @@ Optional: <code style='color:#94A3B8;font-size:.72rem;'>Date, Stage</code>
 </p>
 </div>""", unsafe_allow_html=True)
 
-        if not uploaded:
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("""
-<div style='text-align:center;padding:1.5rem .5rem;color:#475569;'>
-  <div style='font-size:2rem;'>📂</div>
-  <div style='font-size:.82rem;margin-top:.4rem;'>Upload a CSV to get started</div>
-</div>""", unsafe_allow_html=True)
-            return None
+        if uploaded:
+            raw_bytes = uploaded.read()
+            fh = file_hash(raw_bytes)
 
-        raw_bytes = uploaded.read()
-        fh = file_hash(raw_bytes)
-        try:
-            df_raw = pd.read_csv(pd.io.common.BytesIO(raw_bytes))
-            df = load_and_clean(df_raw)
-        except Exception as e:
-            st.error(f"CSV error: {e}")
-            return None
+            try:
+                df_raw = pd.read_csv(pd.io.common.BytesIO(raw_bytes))
+                df = load_and_clean(df_raw)
+                st.sidebar.success("Using uploaded dataset")
+            except Exception as e:
+                st.error(f"CSV error: {e}")
+                return None
+
+        else:
+            try:
+                df_raw = pd.read_csv("world_cup_clean.csv")
+                df = load_and_clean(df_raw)
+                fh = "default_dataset"
+                st.sidebar.info("Using default World Cup dataset")
+            except Exception as e:
+                st.error(f"Could not load world_cup_clean.csv: {e}")
+                return None
 
         teams_count = df[["Team 1", "Team 2"]].stack().nunique()
         st.markdown(f"""
