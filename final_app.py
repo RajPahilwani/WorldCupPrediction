@@ -47,10 +47,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# THEME / CSS (unchanged)
-# ─────────────────────────────────────────────────────────────────────────────
 def inject_css():
     st.markdown("""
 <style>
@@ -120,26 +116,7 @@ p,label,[data-testid="stText"]{color:var(--text);}
   border-radius:10px!important;
 }
 [data-testid="stFileUploader"] *{color:var(--text)!important;}
-/* Force dark mode for all containers */
-.stApp {
-    background: #080D1A !important;
-}
-[data-testid="stHeader"] {
-    background: #060A14 !important;
-}
-[data-testid="stToolbar"] {
-    background: #060A14 !important;
-}
-[data-testid="stDecoration"] {
-    background: #060A14 !important;
-}
-[data-testid="stFileUploader"] {
-    background: #192236 !important;
-    border: 2px dashed #1E2D45 !important;
-}
-[data-testid="stFileUploader"] * {
-    color: #F1F5F9 !important;
-}
+
 /* ─ Metrics ─ */
 [data-testid="stMetric"]{background:var(--surf2);border:1px solid var(--border);
   border-radius:10px;padding:.9rem 1rem;}
@@ -248,9 +225,39 @@ p,label,[data-testid="stText"]{color:var(--text);}
 /* ─ DataFrames ─ */
 [data-testid="stDataFrame"]{border-radius:8px!important;}
 [data-testid="stDataFrame"] table{background:var(--surf)!important;}
+
+/* ─ FORCE DARK MODE ON STREAMLIT UI ELEMENTS ─ */
+/* Top header bar - fix white bar */
+[data-testid="stHeader"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"] {
+    background: #060A14 !important;
+}
+[data-testid="stHeader"] *,
+[data-testid="stToolbar"] * {
+    color: #F1F5F9 !important;
+}
+
+/* File uploader - ensure dark background */
+[data-testid="stFileUploader"] {
+    background: #192236 !important;
+    border: 2px dashed #1E2D45 !important;
+}
+[data-testid="stFileUploader"] * {
+    color: #F1F5F9 !important;
+}
+[data-testid="stFileUploader"] .st-df,
+[data-testid="stFileUploader"] .st-eb {
+    background: #101828 !important;
+}
+
+/* Main app container reinforcement */
+[data-testid="stAppViewContainer"],
+[data-testid="stAppViewBlockContainer"] {
+    background: #080D1A !important;
+}
 </style>
 """, unsafe_allow_html=True)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MODEL CONSTANTS
