@@ -1,7 +1,4 @@
-
-warnings
-collections
-typing
+plotly
 numpy
 pandas
 scipy
