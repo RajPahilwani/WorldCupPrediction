@@ -41,7 +41,7 @@ warnings.filterwarnings("ignore")
 # PAGE CONFIG  ← must be first Streamlit call
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Soccer Oracle",
+    page_title="DELPHI",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded",
