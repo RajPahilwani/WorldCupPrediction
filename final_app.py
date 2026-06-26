@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════════════╗
-║   SOCCER ORACLE  —  Streamlit Web App                       ║
-║   Advanced Match Prediction  v5.1                           ║
-║                                                              ║
-║   - Default dataset: world_cup_clean.csv (if exists)        ║
-║   - Optional upload override                                ║
-║   - Both Teams to Score (BTTS) probability added            ║
-║                                                              ║
-║   Install:  pip install streamlit plotly scikit-learn       ║
-║             scipy pandas numpy                               ║
-║   Run:      streamlit run soccer_oracle_app.py               ║
-╚══════════════════════════════════════════════════════════════╝
+DELPHI — Advanced Match Prediction v5.2
+Changes vs v5.1:
+  - Manual ensemble weights correctly applied to predictions
+  - Advanced settings expander is fully dark/black
+  - Backtest tab: rerun with custom weights + holdout size slider
+  - Uncertainty / volatility indicators per team and in match log
+  - Teams tab: shows ALL teams, more sort options (BTTS, volatility, etc.)
+  - Volatility scores added to team snapshots
+Install: pip install streamlit plotly scikit-learn scipy pandas numpy
+Run:     streamlit run soccer_oracle_app.py
 """
 
-# ── IMPORTS ──────────────────────────────────────────────────────────────────
+import copy
 import math
 import hashlib
 import warnings
@@ -37,118 +35,57 @@ from sklearn.preprocessing import StandardScaler
 
 warnings.filterwarnings("ignore")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE CONFIG  ← must be first Streamlit call
-# ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="DELPHI",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
+DEFAULT_WEIGHTS = np.array([0.0, 0.74, 0.26])  # P, GB, RF
+# ─────────────────────────────────────────────────────────────────────────────
+# CSS
+# ─────────────────────────────────────────────────────────────────────────────
 def inject_css():
     st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
-
 :root{
-  --bg:#080D1A; --surf:#101828; --surf2:#192236; --surf3:#1F2D42;
-  --accent:#22D3EE; --purple:#A78BFA;
-  --t1:#60A5FA; --t2:#FB923C;
-  --win:#34D399; --draw:#FBBF24; --loss:#F87171;
-  --text:#F1F5F9; --muted:#94A3B8; --border:#1E2D45;
+  --bg:#080D1A;--surf:#101828;--surf2:#192236;--surf3:#1F2D42;
+  --accent:#22D3EE;--purple:#A78BFA;
+  --t1:#60A5FA;--t2:#FB923C;
+  --win:#34D399;--draw:#FBBF24;--loss:#F87171;
+  --text:#F1F5F9;--muted:#94A3B8;--border:#1E2D45;
 }
-
-/* ─ Base ─ */
 .stApp{background:var(--bg)!important;}
 [data-testid="stSidebar"]{background:#060A14!important;border-right:1px solid var(--border);}
 [data-testid="stSidebar"] *{color:var(--text)!important;}
 [data-testid="stSidebar"] .stMarkdown p{color:var(--muted)!important;font-size:0.82rem;}
 .block-container{padding-top:1.5rem!important;}
-
-/* ─ Typography ─ */
 h1,h2,h3,h4{font-family:'Bebas Neue',sans-serif!important;letter-spacing:0.07em;color:var(--text)!important;}
 p,label,[data-testid="stText"]{color:var(--text);}
-
-/* ─ Tabs ─ */
-.stTabs [data-baseweb="tab-list"]{
-  background:var(--surf)!important;border-radius:10px!important;
-  padding:4px!important;border:1px solid var(--border)!important;gap:2px!important;
-}
-.stTabs [data-baseweb="tab"]{
-  background:transparent!important;color:var(--muted)!important;
-  border-radius:7px!important;font-weight:500!important;
-  padding:0.45rem 1.2rem!important;font-family:'Inter',sans-serif!important;
-}
-.stTabs [aria-selected="true"]{
-  background:linear-gradient(135deg,rgba(34,211,238,.15),rgba(167,139,250,.15))!important;
-  color:var(--text)!important;border:1px solid rgba(34,211,238,.35)!important;
-}
-
-/* ─ Buttons ─ */
-.stButton>button{
-  background:linear-gradient(135deg,#22D3EE,#818CF8)!important;
-  color:#080D1A!important;font-weight:700!important;border:none!important;
-  border-radius:9px!important;padding:0.65rem 2rem!important;
-  font-size:0.95rem!important;letter-spacing:0.06em!important;
-  font-family:'Inter',sans-serif!important;transition:opacity .2s!important;
-  width:100%;
-}
+.stTabs [data-baseweb="tab-list"]{background:var(--surf)!important;border-radius:10px!important;padding:4px!important;border:1px solid var(--border)!important;gap:2px!important;}
+.stTabs [data-baseweb="tab"]{background:transparent!important;color:var(--muted)!important;border-radius:7px!important;font-weight:500!important;padding:0.45rem 1.2rem!important;font-family:'Inter',sans-serif!important;}
+.stTabs [aria-selected="true"]{background:linear-gradient(135deg,rgba(34,211,238,.15),rgba(167,139,250,.15))!important;color:var(--text)!important;border:1px solid rgba(34,211,238,.35)!important;}
+.stButton>button{background:linear-gradient(135deg,#22D3EE,#818CF8)!important;color:#080D1A!important;font-weight:700!important;border:none!important;border-radius:9px!important;padding:0.65rem 2rem!important;font-size:0.95rem!important;letter-spacing:0.06em!important;font-family:'Inter',sans-serif!important;transition:opacity .2s!important;width:100%;}
 .stButton>button:hover{opacity:.86!important;transform:translateY(-1px);}
-
-/* ─ Select boxes ─ */
-.stSelectbox>div>div{
-  background:var(--surf2)!important;border:1px solid var(--border)!important;
-  border-radius:8px!important;color:var(--text)!important;
-}
-.stSelectbox label{color:var(--muted)!important;font-size:0.78rem!important;
-  text-transform:uppercase;letter-spacing:.1em;}
-
-/* ─ Radio ─ */
-.stRadio>label{color:var(--muted)!important;font-size:0.78rem!important;
-  text-transform:uppercase;letter-spacing:.1em;}
+.stSelectbox>div>div{background:var(--surf2)!important;border:1px solid var(--border)!important;border-radius:8px!important;color:var(--text)!important;}
+.stSelectbox label{color:var(--muted)!important;font-size:0.78rem!important;text-transform:uppercase;letter-spacing:.1em;}
+.stRadio>label{color:var(--muted)!important;font-size:0.78rem!important;text-transform:uppercase;letter-spacing:.1em;}
 .stRadio [data-testid="stMarkdownContainer"] p{color:var(--text)!important;}
-
-/* ─ File uploader ─ */
-[data-testid="stFileUploader"]{
-  background:var(--surf2)!important;border:2px dashed var(--border)!important;
-  border-radius:10px!important;
-}
+[data-testid="stFileUploader"]{background:var(--surf2)!important;border:2px dashed var(--border)!important;border-radius:10px!important;}
 [data-testid="stFileUploader"] *{color:var(--text)!important;}
-
-/* ─ Metrics ─ */
-[data-testid="stMetric"]{background:var(--surf2);border:1px solid var(--border);
-  border-radius:10px;padding:.9rem 1rem;}
-[data-testid="stMetricValue"]{font-family:'Bebas Neue',sans-serif!important;
-  font-size:2rem!important;color:var(--text)!important;}
-[data-testid="stMetricLabel"]{color:var(--muted)!important;font-size:.72rem!important;
-  text-transform:uppercase;letter-spacing:.1em;}
+[data-testid="stMetric"]{background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:.9rem 1rem;}
+[data-testid="stMetricValue"]{font-family:'Bebas Neue',sans-serif!important;font-size:2rem!important;color:var(--text)!important;}
+[data-testid="stMetricLabel"]{color:var(--muted)!important;font-size:.72rem!important;text-transform:uppercase;letter-spacing:.1em;}
 [data-testid="stMetricDelta"]{font-size:.8rem!important;}
-
-/* ─ Cards ─ */
-.oracle-card{background:var(--surf);border:1px solid var(--border);
-  border-radius:12px;padding:1.25rem 1.4rem;margin-bottom:.6rem;}
-.oracle-card-glow{background:var(--surf);border:1px solid var(--accent);
-  border-radius:12px;padding:1.25rem 1.4rem;
-  box-shadow:0 0 24px rgba(34,211,238,.14);margin-bottom:.6rem;}
-
-/* ─ VS Banner ─ */
-.vs-banner{display:flex;align-items:center;justify-content:space-between;
-  background:var(--surf);border:1px solid var(--border);border-radius:14px;
-  padding:1.4rem 2rem;margin-bottom:1.2rem;}
-.vs-team-t1{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;
-  color:var(--t1);letter-spacing:.06em;line-height:1;}
-.vs-team-t2{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;
-  color:var(--t2);letter-spacing:.06em;text-align:right;line-height:1;}
+.oracle-card{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:1.25rem 1.4rem;margin-bottom:.6rem;}
+.oracle-card-glow{background:var(--surf);border:1px solid var(--accent);border-radius:12px;padding:1.25rem 1.4rem;box-shadow:0 0 24px rgba(34,211,238,.14);margin-bottom:.6rem;}
+.vs-banner{display:flex;align-items:center;justify-content:space-between;background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:1.4rem 2rem;margin-bottom:1.2rem;}
+.vs-team-t1{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;color:var(--t1);letter-spacing:.06em;line-height:1;}
+.vs-team-t2{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;color:var(--t2);letter-spacing:.06em;text-align:right;line-height:1;}
 .vs-center{display:flex;flex-direction:column;align-items:center;gap:.3rem;}
-.vs-score{font-family:'Bebas Neue',sans-serif;font-size:3.4rem;
-  color:var(--text);letter-spacing:.12em;line-height:1;}
-.vs-badge{font-family:'Bebas Neue',sans-serif;font-size:1rem;
-  color:var(--muted);background:var(--surf3);border-radius:6px;
-  padding:.2rem .8rem;border:1px solid var(--border);}
-
-/* ─ Outcome Probs ─ */
+.vs-score{font-family:'Bebas Neue',sans-serif;font-size:3.4rem;color:var(--text);letter-spacing:.12em;line-height:1;}
+.vs-badge{font-family:'Bebas Neue',sans-serif;font-size:1rem;color:var(--muted);background:var(--surf3);border-radius:6px;padding:.2rem .8rem;border:1px solid var(--border);}
 .outcome-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem;margin:.8rem 0;}
 .outcome-cell{text-align:center;border-radius:10px;padding:1rem .5rem;border:1px solid var(--border);}
 .outcome-cell.win{background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.35);}
@@ -158,109 +95,76 @@ p,label,[data-testid="stText"]{color:var(--text);}
 .outcome-pct.win{color:var(--win);}
 .outcome-pct.draw{color:var(--draw);}
 .outcome-pct.loss{color:var(--loss);}
-.outcome-label{font-size:.72rem;text-transform:uppercase;
-  letter-spacing:.12em;color:var(--muted);margin-top:.25rem;}
-
-/* ─ Score Grid ─ */
+.outcome-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-top:.25rem;}
 .score-grid{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem;}
-.score-pill{display:inline-flex;align-items:center;gap:.5rem;
-  background:var(--surf3);border:1px solid var(--border);
-  border-radius:8px;padding:.4rem .8rem;}
-.score-pill.top1{border-color:rgba(34,211,238,.5);
-  background:rgba(34,211,238,.08);}
-.score-num{font-family:'JetBrains Mono',monospace;font-size:1.05rem;
-  font-weight:600;color:var(--text);}
+.score-pill{display:inline-flex;align-items:center;gap:.5rem;background:var(--surf3);border:1px solid var(--border);border-radius:8px;padding:.4rem .8rem;}
+.score-pill.top1{border-color:rgba(34,211,238,.5);background:rgba(34,211,238,.08);}
+.score-num{font-family:'JetBrains Mono',monospace;font-size:1.05rem;font-weight:600;color:var(--text);}
 .score-pct{font-size:.78rem;font-weight:600;color:var(--accent);}
-.score-tag{font-size:.68rem;color:var(--muted);
-  background:var(--surf2);border-radius:4px;padding:.1rem .35rem;}
-
-/* ─ Verdict ─ */
-.verdict{background:linear-gradient(135deg,rgba(34,211,238,.12),rgba(167,139,250,.12));
-  border:1px solid rgba(34,211,238,.4);border-radius:12px;
-  padding:1.4rem;text-align:center;margin-top:.8rem;}
-.verdict-main{font-family:'Bebas Neue',sans-serif;font-size:2rem;
-  letter-spacing:.1em;color:var(--accent);}
+.score-tag{font-size:.68rem;color:var(--muted);background:var(--surf2);border-radius:4px;padding:.1rem .35rem;}
+.verdict{background:linear-gradient(135deg,rgba(34,211,238,.12),rgba(167,139,250,.12));border:1px solid rgba(34,211,238,.4);border-radius:12px;padding:1.4rem;text-align:center;margin-top:.8rem;}
+.verdict-main{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:.1em;color:var(--accent);}
 .verdict-sub{font-size:.8rem;color:var(--muted);margin-top:.25rem;}
-
-/* ─ Stats comparison ─ */
-.stat-row{display:grid;grid-template-columns:1fr 120px 1fr;
-  align-items:center;gap:.5rem;padding:.5rem 0;
-  border-bottom:1px solid var(--border);}
+.stat-row{display:grid;grid-template-columns:1fr 120px 1fr;align-items:center;gap:.5rem;padding:.5rem 0;border-bottom:1px solid var(--border);}
 .stat-row:last-child{border-bottom:none;}
-.stat-val-t1{text-align:right;font-family:'JetBrains Mono',monospace;
-  font-size:.9rem;color:var(--t1);}
-.stat-val-t2{text-align:left;font-family:'JetBrains Mono',monospace;
-  font-size:.9rem;color:var(--t2);}
-.stat-name{text-align:center;font-size:.72rem;text-transform:uppercase;
-  letter-spacing:.1em;color:var(--muted);}
-
-/* ─ Backtest table ─ */
-.bt-row{display:grid;grid-template-columns:2fr 60px 60px 60px 55px 90px;
-  gap:.3rem;align-items:center;padding:.5rem .6rem;border-radius:6px;
-  margin:.2rem 0;font-size:.82rem;}
+.stat-val-t1{text-align:right;font-family:'JetBrains Mono',monospace;font-size:.9rem;color:var(--t1);}
+.stat-val-t2{text-align:left;font-family:'JetBrains Mono',monospace;font-size:.9rem;color:var(--t2);}
+.stat-name{text-align:center;font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
+.bt-row{display:grid;grid-template-columns:2fr 60px 60px 60px 55px 90px;gap:.3rem;align-items:center;padding:.5rem .6rem;border-radius:6px;margin:.2rem 0;font-size:.82rem;}
 .bt-row.correct{background:rgba(52,211,153,.06);}
 .bt-row.wrong{background:rgba(248,113,113,.06);}
 .bt-header{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;}
-.bt-tick{font-size:1rem;}
-
-/* ─ Section header ─ */
-.sh{display:flex;align-items:center;gap:.5rem;
-  padding:.4rem 0 .6rem;border-bottom:1px solid var(--border);margin-bottom:.75rem;}
+.sh{display:flex;align-items:center;gap:.5rem;padding:.4rem 0 .6rem;border-bottom:1px solid var(--border);margin-bottom:.75rem;}
 .sh-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;}
-.sh-title{font-family:'Bebas Neue',sans-serif;font-size:1.15rem;
-  letter-spacing:.08em;color:var(--text);}
-
-/* ─ Scrollbar ─ */
+.sh-title{font-family:'Bebas Neue',sans-serif;font-size:1.15rem;letter-spacing:.08em;color:var(--text);}
 ::-webkit-scrollbar{width:5px;}
 ::-webkit-scrollbar-track{background:var(--surf);}
 ::-webkit-scrollbar-thumb{background:var(--surf3);border-radius:3px;}
-
-/* ─ Sidebar logo ─ */
 .sidebar-logo{text-align:center;padding:1rem 0 .5rem;}
-.sidebar-logo-text{font-family:'Bebas Neue',sans-serif;font-size:1.9rem;
-  letter-spacing:.1em;color:var(--accent);}
-.sidebar-logo-sub{font-size:.72rem;color:var(--muted);letter-spacing:.15em;
-  text-transform:uppercase;margin-top:-.25rem;}
-
-/* ─ DataFrames ─ */
+.sidebar-logo-text{font-family:'Bebas Neue',sans-serif;font-size:1.9rem;letter-spacing:.1em;color:var(--accent);}
+.sidebar-logo-sub{font-size:.72rem;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-top:-.25rem;}
 [data-testid="stDataFrame"]{border-radius:8px!important;}
 [data-testid="stDataFrame"] table{background:var(--surf)!important;}
-
-/* ─ FORCE DARK MODE ON STREAMLIT UI ELEMENTS ─ */
-/* Top header bar - fix white bar */
-[data-testid="stHeader"],
-[data-testid="stToolbar"],
-[data-testid="stDecoration"] {
-    background: #060A14 !important;
+[data-testid="stHeader"],[data-testid="stToolbar"],[data-testid="stDecoration"]{background:#060A14!important;}
+[data-testid="stHeader"] *,[data-testid="stToolbar"] *{color:#F1F5F9!important;}
+[data-testid="stAppViewContainer"],[data-testid="stAppViewBlockContainer"]{background:#080D1A!important;}
+/* ── BLACK expander (Advanced Model Settings) ── */
+[data-testid="stSidebar"] details,
+[data-testid="stSidebar"] details summary,
+[data-testid="stSidebar"] [data-testid="stExpander"],
+[data-testid="stSidebar"] [data-testid="stExpander"] > div {
+    background: #000000 !important;
+    border-color: #1E2D45 !important;
+    border-radius: 8px !important;
 }
-[data-testid="stHeader"] *,
-[data-testid="stToolbar"] * {
-    color: #F1F5F9 !important;
+[data-testid="stSidebar"] details summary {
+    color: #94A3B8 !important;
+    font-size: 0.8rem !important;
 }
-
-/* File uploader - ensure dark background */
-[data-testid="stFileUploader"] {
-    background: #192236 !important;
-    border: 2px dashed #1E2D45 !important;
+[data-testid="stSidebar"] [data-testid="stExpander"] .stSlider label,
+[data-testid="stSidebar"] [data-testid="stExpander"] .stSlider div,
+[data-testid="stSidebar"] [data-testid="stExpander"] p,
+[data-testid="stSidebar"] [data-testid="stExpander"] span {
+    color: #94A3B8 !important;
 }
-[data-testid="stFileUploader"] * {
-    color: #F1F5F9 !important;
+/* slider track colour */
+[data-testid="stSidebar"] [data-testid="stExpander"] .stSlider [data-testid="stSlider"] > div > div {
+    background: #1E2D45 !important;
 }
-[data-testid="stFileUploader"] .st-df,
-[data-testid="stFileUploader"] .st-eb {
-    background: #101828 !important;
-}
-
-/* Main app container reinforcement */
-[data-testid="stAppViewContainer"],
-[data-testid="stAppViewBlockContainer"] {
-    background: #080D1A !important;
-}
+/* uncertainty badge */
+.unc-badge{display:inline-block;border-radius:5px;padding:.1rem .45rem;font-size:.7rem;font-family:'JetBrains Mono',monospace;font-weight:600;margin-left:.4rem;}
+.unc-low{background:rgba(52,211,153,.18);color:#34D399;}
+.unc-med{background:rgba(251,191,36,.18);color:#FBBF24;}
+.unc-high{background:rgba(248,113,113,.18);color:#F87171;}
+/* volatility bar */
+.vol-bar-bg{background:#1E2D45;border-radius:4px;height:6px;margin-top:3px;}
+.vol-bar-fill{height:6px;border-radius:4px;background:linear-gradient(90deg,#34D399,#FBBF24,#F87171);}
 </style>
 """, unsafe_allow_html=True)
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-# MODEL CONSTANTS
+# CONSTANTS
 # ─────────────────────────────────────────────────────────────────────────────
 MAX_GOALS = 15
 RECENCY_HALF_LIFE_DAYS = 365.0
@@ -275,9 +179,7 @@ DEFAULT_FORM = 50.0
 STRENGTH_SMOOTHING = 1.5
 H2H_HALF_LIFE_DAYS = 1825.0
 EPS = 1e-9
-OVERDISPERSION_PRIOR = 0.15  # initial guess for NB overdispersion
-
-# Default dataset path (change if needed)
+OVERDISPERSION_PRIOR = 0.15
 DEFAULT_DATASET_PATH = "world_cup_clean.csv"
 
 
@@ -308,10 +210,9 @@ def load_and_clean(df_raw: pd.DataFrame) -> pd.DataFrame:
 # OPPONENT-ADJUSTED STATS
 # ─────────────────────────────────────────────────────────────────────────────
 class OpponentAdjustedStats:
-    """Estimate attack and defense strengths via iterative log-linear model."""
     def __init__(self):
-        self.attack = {}   # team -> log-attack multiplier
-        self.defense = {}  # team -> log-defense multiplier
+        self.attack = {}
+        self.defense = {}
         self.league_avg_goals = 1.5
         self._fitted = False
 
@@ -319,58 +220,40 @@ class OpponentAdjustedStats:
         teams = set(df["Team 1"]).union(set(df["Team 2"]))
         attack = {t: 0.0 for t in teams}
         defense = {t: 0.0 for t in teams}
-        # Use log of goals + 0.1 to avoid zero issues
-        for _ in range(20):  # iterate until convergence
-            # Update attack
+        for _ in range(20):
             for t in teams:
-                matches = df[(df["Team 1"]==t) | (df["Team 2"]==t)]
+                matches = df[(df["Team 1"] == t) | (df["Team 2"] == t)]
                 if matches.empty:
                     continue
-                goals = []
-                opp_def = []
+                goals, opp_def = [], []
                 for _, row in matches.iterrows():
                     if row["Team 1"] == t:
-                        goals.append(row["Goals1"])
-                        opp_def.append(defense[row["Team 2"]])
+                        goals.append(row["Goals1"]); opp_def.append(defense[row["Team 2"]])
                     else:
-                        goals.append(row["Goals2"])
-                        opp_def.append(defense[row["Team 1"]])
-                log_goals = np.log(np.array(goals) + 0.1)
-                # attack = mean(log_goals - opp_def) - global mean (constraint)
-                vals = log_goals - np.array(opp_def)
-                # Exclude extreme outliers
-                vals = np.clip(vals, -3, 3)
+                        goals.append(row["Goals2"]); opp_def.append(defense[row["Team 1"]])
+                vals = np.clip(np.log(np.array(goals) + 0.1) - np.array(opp_def), -3, 3)
                 attack[t] = np.mean(vals) - np.mean(list(attack.values()))
-            # Update defense
             for t in teams:
-                matches = df[(df["Team 1"]==t) | (df["Team 2"]==t)]
+                matches = df[(df["Team 1"] == t) | (df["Team 2"] == t)]
                 if matches.empty:
                     continue
-                goals_conc = []
-                opp_att = []
+                goals_conc, opp_att = [], []
                 for _, row in matches.iterrows():
                     if row["Team 1"] == t:
-                        goals_conc.append(row["Goals2"])
-                        opp_att.append(attack[row["Team 2"]])
+                        goals_conc.append(row["Goals2"]); opp_att.append(attack[row["Team 2"]])
                     else:
-                        goals_conc.append(row["Goals1"])
-                        opp_att.append(attack[row["Team 1"]])
-                log_goals_conc = np.log(np.array(goals_conc) + 0.1)
-                vals = log_goals_conc - np.array(opp_att)
-                vals = np.clip(vals, -3, 3)
+                        goals_conc.append(row["Goals1"]); opp_att.append(attack[row["Team 1"]])
+                vals = np.clip(np.log(np.array(goals_conc) + 0.1) - np.array(opp_att), -3, 3)
                 defense[t] = np.mean(vals) - np.mean(list(defense.values()))
-        # Store results
         self.attack = attack
         self.defense = defense
-        self.league_avg_goals = np.mean([row["Goals1"]+row["Goals2"] for _, row in df.iterrows()]) / 2.0
+        self.league_avg_goals = np.mean([row["Goals1"] + row["Goals2"] for _, row in df.iterrows()]) / 2.0
         self._fitted = True
 
     def get_attack(self, team: str) -> float:
-        """Return exp(attack) multiplier (≥0.1)"""
         return np.exp(self.attack.get(team, 0.0))
 
     def get_defense(self, team: str) -> float:
-        """Return exp(defense) multiplier (≥0.1)"""
         return np.exp(self.defense.get(team, 0.0))
 
 
@@ -389,24 +272,18 @@ class FeatureEngine:
         self._team_match_count: Dict[str, int] = defaultdict(int)
         self._team_opponent_elos: Dict[str, List[float]] = defaultdict(list)
         self._league_goal_history: List[float] = []
-        self._h2h: Dict[
-            Tuple[str, str],
-            List[Tuple[str, str, int, int, Optional[pd.Timestamp]]],
-        ] = defaultdict(list)
-        # NEW: opponent-adjusted stats
+        self._h2h: Dict[Tuple[str, str], List] = defaultdict(list)
         self.opp_attack: Dict[str, float] = {}
         self.opp_defense: Dict[str, float] = {}
         self._opp_fitted = False
 
     def fit_opponent_stats(self, df: pd.DataFrame):
-        """Fit opponent-adjusted attack/defense multipliers on full dataset."""
         opp = OpponentAdjustedStats()
         opp.fit(df)
         self.opp_attack = {t: opp.get_attack(t) for t in opp.attack.keys()}
         self.opp_defense = {t: opp.get_defense(t) for t in opp.defense.keys()}
         self._opp_fitted = True
-        # Also set league avg from opponent stats
-        self._league_avg_goals_per_team = lambda: opp.league_avg_goals
+        self._league_avg_goals_opp = opp.league_avg_goals
 
     def _weighted_mean(self, vals, n=None, smoothing=STRENGTH_SMOOTHING):
         n = n or self.window
@@ -431,6 +308,8 @@ class FeatureEngine:
         return float(np.average(r, weights=weights) / 3.0 * 100.0)
 
     def _league_avg_goals_per_team(self):
+        if hasattr(self, "_league_avg_goals_opp"):
+            return self._league_avg_goals_opp
         if not self._league_goal_history:
             return DEFAULT_LEAGUE_GOALS_PER_TEAM
         return float(np.mean(self._league_goal_history[-self.window:]))
@@ -463,10 +342,20 @@ class FeatureEngine:
         form5 = sum(results[-5:]) / (3.0 * max(len(results[-5:]), 1)) * 100.0
         form_w = self._weighted_form(results)
         opp_elo_avg = self._rolling_mean(opp_elos)
-
-        # NEW: opponent-adjusted attack/defense
         opp_att = self.opp_attack.get(team, 1.0)
         opp_def = self.opp_defense.get(team, 1.0)
+
+        # ── Volatility / uncertainty metrics ──────────────────────────────
+        goal_variance = self._rolling_std(gs)
+        concede_variance = self._rolling_std(gc)
+        # Coefficient of variation for scored goals (std / mean+eps)
+        goal_cv = goal_variance / max(raw_attack, 0.1)
+        result_volatility = self._rolling_std(results)  # std of points earned
+        # Composite volatility: blend of goal spread and result inconsistency
+        volatility = float(np.clip(
+            0.4 * goal_variance / 2.5 + 0.3 * concede_variance / 2.5 + 0.3 * result_volatility / 3.0,
+            0.0, 1.0
+        ))
 
         return {
             "elo": elo_last,
@@ -484,8 +373,14 @@ class FeatureEngine:
             "btts_rate": btts,
             "match_count": mc,
             "opp_elo_avg": opp_elo_avg,
-            "opp_attack": opp_att,        # NEW
-            "opp_defense": opp_def,       # NEW
+            "opp_attack": opp_att,
+            "opp_defense": opp_def,
+            # volatility block
+            "goal_variance": goal_variance,
+            "concede_variance": concede_variance,
+            "goal_cv": goal_cv,
+            "result_volatility": result_volatility,
+            "volatility": volatility,
         }
 
     def _h2h_stats(self, t1, t2, current_date=None):
@@ -522,11 +417,8 @@ class FeatureEngine:
         trend3_diff = s1["elo_trend3"] - s2["elo_trend3"]
         stage_goal_mod = 1.0 if is_group else 0.92
 
-        # NEW: Use opponent-adjusted attack/defense multipliers
         base_xg1 = league_avg * s1["opp_attack"] * s2["opp_defense"] * stage_goal_mod
         base_xg2 = league_avg * s2["opp_attack"] * s1["opp_defense"] * stage_goal_mod
-
-        # Also keep the rolling strength versions as features
         rolling_xg1 = league_avg * s1["attack_strength"] * s2["defense_weakness"] * stage_goal_mod
         rolling_xg2 = league_avg * s2["attack_strength"] * s1["defense_weakness"] * stage_goal_mod
 
@@ -535,18 +427,12 @@ class FeatureEngine:
         def1_strength = s1["defense_strength"]
         def2_strength = s2["defense_strength"]
         strength_t1 = (
-            0.35 * elo_win_prob
-            + 0.25 * min(s1["attack_strength"], 3.0) / 3.0
-            + 0.15 * min(def1_strength, 3.0) / 3.0
-            + 0.15 * fw1
-            + 0.10 * s1["clean_sheet_rate"]
+            0.35 * elo_win_prob + 0.25 * min(s1["attack_strength"], 3.0) / 3.0
+            + 0.15 * min(def1_strength, 3.0) / 3.0 + 0.15 * fw1 + 0.10 * s1["clean_sheet_rate"]
         )
         strength_t2 = (
-            0.35 * (1.0 - elo_win_prob)
-            + 0.25 * min(s2["attack_strength"], 3.0) / 3.0
-            + 0.15 * min(def2_strength, 3.0) / 3.0
-            + 0.15 * fw2
-            + 0.10 * s2["clean_sheet_rate"]
+            0.35 * (1.0 - elo_win_prob) + 0.25 * min(s2["attack_strength"], 3.0) / 3.0
+            + 0.15 * min(def2_strength, 3.0) / 3.0 + 0.15 * fw2 + 0.10 * s2["clean_sheet_rate"]
         )
         h2hw, h2hd, h2hl, h2hn = self._h2h_stats(t1, t2, current_date=current_date)
 
@@ -580,8 +466,7 @@ class FeatureEngine:
             "strength_diff": strength_t1 - strength_t2,
             "h2h_advantage": h2hw - h2hl,
             "h2h_win_rate_t1": h2hw, "h2h_draw_rate": h2hd,
-            "h2h_win_rate_t2": h2hl,
-            "h2h_matches": h2hn,
+            "h2h_win_rate_t2": h2hl, "h2h_matches": h2hn,
             "is_group": int(is_group), "is_knockout": int(not is_group),
             "stage_goal_mod": stage_goal_mod,
             "avg_total_goals_pred": base_xg1 + base_xg2,
@@ -590,10 +475,8 @@ class FeatureEngine:
             "opp_elo_diff": s1["opp_elo_avg"] - s2["opp_elo_avg"],
             "experience_t1": min(s1["match_count"] / 20.0, 1.0),
             "experience_t2": min(s2["match_count"] / 20.0, 1.0),
-            "opp_attack_t1": s1["opp_attack"],
-            "opp_attack_t2": s2["opp_attack"],
-            "opp_defense_t1": s1["opp_defense"],
-            "opp_defense_t2": s2["opp_defense"],
+            "opp_attack_t1": s1["opp_attack"], "opp_attack_t2": s2["opp_attack"],
+            "opp_defense_t1": s1["opp_defense"], "opp_defense_t2": s2["opp_defense"],
         }
         return feat, base_xg1, base_xg2
 
@@ -602,7 +485,6 @@ class FeatureEngine:
 
     def compute_all_features(self, df: pd.DataFrame) -> pd.DataFrame:
         self.fit_opponent_stats(df)
-
         feature_rows = []
         for _, row in df.iterrows():
             t1 = str(row["Team 1"]).strip()
@@ -694,13 +576,12 @@ class SoccerEnsemble:
     def __init__(self):
         self.scaler = StandardScaler()
         self.rho = 0.0
-        self.w1 = np.array([1/3, 1/3, 1/3])
-        self.w2 = np.array([1/3, 1/3, 1/3])
+        self.w1 = np.array([0.02, 0.77, 0.21])
+        self.w2 = np.array([0.02, 0.77, 0.21])
         self.feature_cols: List[str] = []
         self.overdispersion_t1 = OVERDISPERSION_PRIOR
         self.overdispersion_t2 = OVERDISPERSION_PRIOR
         self._overdispersion_fitted = False
-
         self.models_t1 = [
             PoissonRegressor(alpha=0.08, max_iter=5000),
             GradientBoostingRegressor(n_estimators=300, max_depth=3, learning_rate=0.03,
@@ -715,6 +596,9 @@ class SoccerEnsemble:
             RandomForestRegressor(n_estimators=350, max_depth=8, min_samples_leaf=3,
                                   random_state=42, n_jobs=-1),
         ]
+        # stored CV-calibrated weights before any manual override
+        self.w1 = np.array([0.02, 0.77, 0.21])
+        self.w2 = np.array([0.02, 0.77, 0.21])
 
     def _augment(self, X, y1, y2, w):
         feat_cols = X.columns.tolist()
@@ -722,8 +606,7 @@ class SoccerEnsemble:
         X_rev = X.copy()
         for c1, c2 in swap_map.items():
             v1, v2 = X[c2].values.copy(), X[c1].values.copy()
-            X_rev[c1] = v1
-            X_rev[c2] = v2
+            X_rev[c1] = v1; X_rev[c2] = v2
         for col in ["elo_diff", "attack_strength_diff", "defense_weakness_diff",
                     "xg_diff", "form_diff_last5", "form_diff_weighted",
                     "strength_diff", "elo_trend_diff", "elo_trend3_diff",
@@ -737,12 +620,10 @@ class SoccerEnsemble:
         for a, b in [("elo1", "elo2"), ("elo_xg1", "elo_xg2")]:
             if a in feat_cols and b in feat_cols:
                 va, vb = X[b].values.copy(), X[a].values.copy()
-                X_rev[a] = va
-                X_rev[b] = vb
+                X_rev[a] = va; X_rev[b] = vb
         if "h2h_win_rate_t1" in feat_cols and "h2h_win_rate_t2" in feat_cols:
             v1, v2 = X["h2h_win_rate_t2"].values.copy(), X["h2h_win_rate_t1"].values.copy()
-            X_rev["h2h_win_rate_t1"] = v1
-            X_rev["h2h_win_rate_t2"] = v2
+            X_rev["h2h_win_rate_t1"] = v1; X_rev["h2h_win_rate_t2"] = v2
         X_all = pd.concat([X, X_rev], ignore_index=True)
         return X_all.values, np.concatenate([y1, y2]), np.concatenate([y2, y1]), np.concatenate([w, w])
 
@@ -776,7 +657,7 @@ class SoccerEnsemble:
             if n_splits >= 2:
                 tscv = TimeSeriesSplit(n_splits=n_splits)
                 cv_arr = cv_X.values
-                cv_y1, cv_y2, cv_w = np.asarray(cv_y1, float), np.asarray(cv_y2, float), np.asarray(cv_w, float)
+                cv_y1_, cv_y2_, cv_w_ = np.asarray(cv_y1, float), np.asarray(cv_y2, float), np.asarray(cv_w, float)
 
                 def cv_mse(base_est, target_y, side):
                     mses = []
@@ -786,7 +667,7 @@ class SoccerEnsemble:
                         Xval = sc2.transform(cv_arr[val])
                         est = clone(base_est)
                         Xtr_df = pd.DataFrame(Xtr, columns=self.feature_cols)
-                        Xa2, ya12, ya22, wa2 = self._augment(Xtr_df, cv_y1[tr], cv_y2[tr], cv_w[tr])
+                        Xa2, ya12, ya22, wa2 = self._augment(Xtr_df, cv_y1_[tr], cv_y2_[tr], cv_w_[tr])
                         Xas = sc2.transform(Xa2)
                         y_use = ya12 if side == 1 else ya22
                         if not isinstance(est, PoissonRegressor):
@@ -797,33 +678,61 @@ class SoccerEnsemble:
                         mses.append(mean_squared_error(target_y[val], pred))
                     return float(np.mean(mses)) if mses else 1e6
 
-                m1 = np.array([cv_mse(m, cv_y1, 1) for m in self.models_t1])
-                m2 = np.array([cv_mse(m, cv_y2, 2) for m in self.models_t2])
-                i1, i2 = 1 / (m1 + 1e-9), 1 / (m2 + 1e-9)
-                self.w1, self.w2 = i1 / i1.sum(), i2 / i2.sum()
+                m1 = np.array([cv_mse(m, cv_y1_, 1) for m in self.models_t1])
+                m2 = np.array([cv_mse(m, cv_y2_, 2) for m in self.models_t2])
+
+                inv1 = 1 / (m1 + 1e-9)
+                inv2 = 1 / (m2 + 1e-9)
+
+                # ── compression factor (KEY IDEA) ──
+                POISSON_COMPRESSION = 0.15  # lower = less influence
+
+                inv1[0] *= POISSON_COMPRESSION
+                inv2[0] *= POISSON_COMPRESSION
+
+                self.w1 = inv1 / inv1.sum()
+                self.w2 = inv2 / inv2.sum()
+
+        self._cv_w1 = self.w1.copy()
+        self._cv_w2 = self.w2.copy()
 
         Xs_orig = self.scaler.transform(X.values)
-        l1, l2 = self._predict_side(self.models_t1, Xs_orig, self.w1), self._predict_side(self.models_t2, Xs_orig, self.w2)
+        l1 = self._predict_side(self.models_t1, Xs_orig, self.w1)
+        l2 = self._predict_side(self.models_t2, Xs_orig, self.w2)
         self.rho = estimate_rho(y1, y2, l1, l2)
         self.fit_overdispersion(y1, y2, l1, l2)
         return self
 
+    def apply_manual_weights(self, weights_dict: dict):
+        """Override blend weights from manual sidebar sliders (normalised externally)."""
+        w = np.array([weights_dict["poisson"], weights_dict["gb"], weights_dict["rf"]], dtype=float)
+        w = np.clip(w, 0.0, 1.0)
+        s = w.sum()
+        if s < 1e-9:
+            w = np.array([1/3, 1/3, 1/3])
+        else:
+            w /= s
+        self.w1 = w.copy()
+        self.w2 = w.copy()
+
+    def restore_cv_weights(self):
+        """Restore the weights fitted by time-series CV."""
+        self.w1 = self._cv_w1.copy()
+        self.w2 = self._cv_w2.copy()
+
     def fit_overdispersion(self, y1, y2, lam1, lam2):
         def neg_log_likelihood(alpha_vals):
             a1, a2 = alpha_vals
-            a1 = max(0.01, min(a1, 2.0))
-            a2 = max(0.01, min(a2, 2.0))
+            a1 = max(0.01, min(a1, 2.0)); a2 = max(0.01, min(a2, 2.0))
             ll = 0.0
             for g1, g2, l1, l2 in zip(y1, y2, lam1, lam2):
                 if l1 > 0.01:
-                    n1 = 1.0 / a1
-                    p1 = 1.0 / (1.0 + a1 * l1)
+                    n1 = 1.0 / a1; p1 = 1.0 / (1.0 + a1 * l1)
                     ll += nbinom.logpmf(g1, n1, p1)
                 else:
                     ll += poisson.logpmf(g1, l1)
                 if l2 > 0.01:
-                    n2 = 1.0 / a2
-                    p2 = 1.0 / (1.0 + a2 * l2)
+                    n2 = 1.0 / a2; p2 = 1.0 / (1.0 + a2 * l2)
                     ll += nbinom.logpmf(g2, n2, p2)
                 else:
                     ll += poisson.logpmf(g2, l2)
@@ -831,15 +740,12 @@ class SoccerEnsemble:
 
         best_alpha = (OVERDISPERSION_PRIOR, OVERDISPERSION_PRIOR)
         best_ll = float('inf')
-        starts = [(0.05, 0.05), (0.15, 0.15), (0.3, 0.3), (0.1, 0.2), (0.2, 0.1)]
-        for start in starts:
+        for start in [(0.05, 0.05), (0.15, 0.15), (0.3, 0.3), (0.1, 0.2), (0.2, 0.1)]:
             try:
-                res = minimize(neg_log_likelihood, start, method='L-BFGS-B',
-                               bounds=[(0.01, 2.0), (0.01, 2.0)])
+                res = minimize(neg_log_likelihood, start, method='L-BFGS-B', bounds=[(0.01, 2.0), (0.01, 2.0)])
                 if res.fun < best_ll:
-                    best_ll = res.fun
-                    best_alpha = (res.x[0], res.x[1])
-            except:
+                    best_ll = res.fun; best_alpha = (res.x[0], res.x[1])
+            except Exception:
                 continue
         self.overdispersion_t1 = max(0.01, min(best_alpha[0], 2.0))
         self.overdispersion_t2 = max(0.01, min(best_alpha[1], 2.0))
@@ -848,20 +754,16 @@ class SoccerEnsemble:
     def score_matrix(self, lam1: float, lam2: float) -> np.ndarray:
         g = np.arange(MAX_GOALS + 1)
         if self._overdispersion_fitted:
-            a1 = self.overdispersion_t1
-            a2 = self.overdispersion_t2
-            probs1 = np.zeros(len(g))
-            probs2 = np.zeros(len(g))
+            a1, a2 = self.overdispersion_t1, self.overdispersion_t2
+            probs1, probs2 = np.zeros(len(g)), np.zeros(len(g))
             for i, goals in enumerate(g):
                 if lam1 > 0.01:
-                    n1 = 1.0 / a1
-                    p1 = 1.0 / (1.0 + a1 * lam1)
+                    n1 = 1.0 / a1; p1 = 1.0 / (1.0 + a1 * lam1)
                     probs1[i] = nbinom.pmf(goals, n1, p1)
                 else:
                     probs1[i] = poisson.pmf(goals, lam1)
                 if lam2 > 0.01:
-                    n2 = 1.0 / a2
-                    p2 = 1.0 / (1.0 + a2 * lam2)
+                    n2 = 1.0 / a2; p2 = 1.0 / (1.0 + a2 * lam2)
                     probs2[i] = nbinom.pmf(goals, n2, p2)
                 else:
                     probs2[i] = poisson.pmf(goals, lam2)
@@ -882,8 +784,6 @@ class SoccerEnsemble:
         return float(np.tril(mat, -1).sum()), float(np.trace(mat)), float(np.triu(mat, 1).sum())
 
     def btts_prob(self, mat: np.ndarray) -> float:
-        """Probability both teams score at least one goal."""
-        # sum over all i>=1, j>=1
         return float(mat[1:, 1:].sum())
 
     def predict_xg(self, X: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
@@ -920,10 +820,11 @@ def train_pipeline(df):
     return model, engine, feat_df
 
 
-def evaluate(model, feat_df, df):
+def evaluate(model: SoccerEnsemble, feat_df: pd.DataFrame, df: pd.DataFrame) -> dict:
     y1, y2 = df["Goals1"].values.astype(int), df["Goals2"].values.astype(int)
     lam1, lam2 = model.predict_xg(feat_df)
     exact, outcome_correct, nlls = [], [], []
+    confidences = []
     for i in range(len(df)):
         mat = model.score_matrix(float(lam1[i]), float(lam2[i]))
         pw, pd_, pl = model.outcome_probs(mat)
@@ -932,6 +833,7 @@ def evaluate(model, feat_df, df):
         outcome_correct.append(int(pred_out == true_out))
         exact.append(int(y1[i] == round(float(lam1[i])) and y2[i] == round(float(lam2[i]))))
         nlls.append(-score_log_prob(y1[i], y2[i], float(lam1[i]), float(lam2[i]), model.rho))
+        confidences.append(float(max(pw, pd_, pl)))
     return {
         "rmse_t1": float(np.sqrt(mean_squared_error(y1, lam1))),
         "rmse_t2": float(np.sqrt(mean_squared_error(y2, lam2))),
@@ -945,6 +847,8 @@ def evaluate(model, feat_df, df):
         "w2": model.w2.tolist(),
         "overdispersion_t1": model.overdispersion_t1,
         "overdispersion_t2": model.overdispersion_t2,
+        "avg_confidence": float(np.mean(confidences)),
+        "low_confidence_pct": float(np.mean([c < 0.45 for c in confidences]) * 100),
     }
 
 
@@ -969,29 +873,34 @@ def predict_match(model, engine, t1, t2, is_group=True):
     flat = np.argsort(mat.ravel())[::-1]
     top5 = [(divmod(int(i), mat.shape[1])[0], divmod(int(i), mat.shape[1])[1], float(mat.ravel()[i]))
             for i in flat[:5]]
-    return {"team1": t1, "team2": t2, "lam1": lam1, "lam2": lam2,
-            "top5": top5, "win": pw, "draw": pd_, "loss": pl,
-            "btts": btts,  # NEW
-            "matrix": mat, "stats1": s1, "stats2": s2}
+
+    # prediction confidence = max outcome probability
+    confidence = float(max(pw, pd_, pl))
+
+    return {
+        "team1": t1, "team2": t2, "lam1": lam1, "lam2": lam2,
+        "top5": top5, "win": pw, "draw": pd_, "loss": pl,
+        "btts": btts, "matrix": mat, "stats1": s1, "stats2": s2,
+        "confidence": confidence,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CACHED TRAINING
+# CACHED TRAINING  (holdout_n is part of cache key)
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
-def cached_train(file_hash: str, _df: pd.DataFrame):
-    """Train both evaluation and final models, cached by CSV hash."""
+def cached_train(file_hash: str, holdout_n: int, _df: pd.DataFrame):
     df = _df
-    holdout_n = max(1, min(max(MIN_HOLDOUT_MATCHES, int(len(df) * HOLDOUT_FRACTION)), len(df) - 1))
-    train_df = df.iloc[:-holdout_n].reset_index(drop=True)
-    test_df = df.iloc[-holdout_n:].reset_index(drop=True)
+    safe_holdout = max(1, min(holdout_n, len(df) - 100))
+    train_df = df.iloc[:-safe_holdout].reset_index(drop=True)
+    test_df = df.iloc[-safe_holdout:].reset_index(drop=True)
+
     TRAIN_WINDOW_DAYS = 365 * 20
     MIN_TRAIN_MATCHES = 100
-
     if len(train_df) > MIN_TRAIN_MATCHES:
-        max_date = train_df['Date'].max()
+        max_date = train_df["Date"].max()
         cutoff = max_date - pd.Timedelta(days=TRAIN_WINDOW_DAYS)
-        filtered_train = train_df[train_df['Date'] >= cutoff].reset_index(drop=True)
+        filtered_train = train_df[train_df["Date"] >= cutoff].reset_index(drop=True)
         if len(filtered_train) >= MIN_TRAIN_MATCHES:
             train_df = filtered_train
 
@@ -1022,7 +931,22 @@ def file_hash(data: bytes) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLOTLY HELPERS (unchanged)
+# CUSTOM-WEIGHTS BACKTEST (not cached – runs on demand)
+# ─────────────────────────────────────────────────────────────────────────────
+def run_custom_backtest(state: dict, weights_dict: dict) -> dict:
+    """Evaluate the holdout set with manually specified ensemble weights."""
+    eval_model = state["eval_model"]
+    orig_w1, orig_w2 = eval_model.w1.copy(), eval_model.w2.copy()
+    eval_model.apply_manual_weights(weights_dict)
+    metrics = evaluate(eval_model, state["feat_test"], state["test_df"])
+    # restore
+    eval_model.w1 = orig_w1
+    eval_model.w2 = orig_w2
+    return metrics
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PLOTLY HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 PLOTLY_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
@@ -1032,176 +956,128 @@ PLOTLY_LAYOUT = dict(
 _MARGIN_DEFAULT = dict(l=10, r=10, t=30, b=10)
 
 
-def score_heatmap(mat: np.ndarray, t1: str, t2: str) -> go.Figure:
+def score_heatmap(mat, t1, t2):
     n = 7
     z = mat[:n, :n] * 100
     text = [[f"{z[i,j]:.1f}%" for j in range(n)] for i in range(n)]
-
-    colorscale = [
-        [0.0, "#101828"],
-        [0.05, "#0d3349"],
-        [0.2, "#0e4f6b"],
-        [0.5, "#0e7490"],
-        [0.8, "#22D3EE"],
-        [1.0, "#bffdff"],
-    ]
-
+    colorscale = [[0.0,"#101828"],[0.05,"#0d3349"],[0.2,"#0e4f6b"],[0.5,"#0e7490"],[0.8,"#22D3EE"],[1.0,"#bffdff"]]
     fig = go.Figure(go.Heatmap(
-        z=z, text=text, texttemplate="%{text}",
-        textfont=dict(size=10, family="JetBrains Mono"),
+        z=z, text=text, texttemplate="%{text}", textfont=dict(size=10, family="JetBrains Mono"),
         colorscale=colorscale, showscale=False,
         hovertemplate=f"{t1} %{{y}} – %{{x}} {t2}: %{{z:.2f}}%<extra></extra>",
         xgap=2, ygap=2,
     ))
-
     fig.update_layout(
-        **PLOTLY_LAYOUT,
-        margin=_MARGIN_DEFAULT,
-        xaxis=dict(
-            title=dict(text=t2[:14], font=dict(color="#FB923C", size=12)),
-            tickvals=list(range(n)), ticktext=list(range(n)),
-            tickfont=dict(size=11),
-        ),
-        yaxis=dict(
-            title=dict(text=t1[:14], font=dict(color="#60A5FA", size=12)),
-            tickvals=list(range(n)), ticktext=list(range(n)),
-            autorange="reversed", tickfont=dict(size=11),
-        ),
+        **PLOTLY_LAYOUT, margin=_MARGIN_DEFAULT,
+        xaxis=dict(title=dict(text=t2[:14], font=dict(color="#FB923C", size=12)),
+                   tickvals=list(range(n)), ticktext=list(range(n)), tickfont=dict(size=11)),
+        yaxis=dict(title=dict(text=t1[:14], font=dict(color="#60A5FA", size=12)),
+                   tickvals=list(range(n)), ticktext=list(range(n)), autorange="reversed", tickfont=dict(size=11)),
         height=310,
     )
-
     for i in range(n):
-        fig.add_shape(type="rect", x0=i - 0.5, x1=i + 0.5, y0=i - 0.5, y1=i + 0.5,
+        fig.add_shape(type="rect", x0=i-0.5, x1=i+0.5, y0=i-0.5, y1=i+0.5,
                       line=dict(color="#FBBF24", width=1.2), fillcolor="rgba(0,0,0,0)")
     return fig
 
 
-def radar_chart(s1: dict, s2: dict, t1: str, t2: str) -> go.Figure:
-    cats = ["Attack\nStrength", "Defense\nStrength", "Form", "Clean Sheets", "BTTS Rate", "Consistency"]
-
-    def norm(val, lo, hi):
-        return max(0.0, min(1.0, (val - lo) / (hi - lo + 1e-9)))
-
-    v1 = [
-        norm(s1["attack_strength"], 0, 2.5),
-        norm(s1["defense_strength"], 0, 3.0),
-        norm(s1["form_weighted"], 0, 100),
-        s1["clean_sheet_rate"],
-        s1["btts_rate"],
-        norm(s1["consistency"], 0, 3.0),
-    ]
-    v2 = [
-        norm(s2["attack_strength"], 0, 2.5),
-        norm(s2["defense_strength"], 0, 3.0),
-        norm(s2["form_weighted"], 0, 100),
-        s2["clean_sheet_rate"],
-        s2["btts_rate"],
-        norm(s2["consistency"], 0, 3.0),
-    ]
-
-    def hex_to_rgba(hex_color: str, alpha: float = 0.12) -> str:
-        hex_color = hex_color.lstrip("#")
-        r = int(hex_color[0:2], 16)
-        g = int(hex_color[2:4], 16)
-        b = int(hex_color[4:6], 16)
-        return f"rgba({r},{g},{b},{alpha})"
-
+def radar_chart(s1, s2, t1, t2):
+    cats = ["Attack\nStrength","Defense\nStrength","Form","Clean Sheets","BTTS Rate","Consistency"]
+    def norm(val, lo, hi): return max(0.0, min(1.0, (val - lo) / (hi - lo + 1e-9)))
+    def hex_rgba(h, a=0.12):
+        h = h.lstrip("#"); return f"rgba({int(h[:2],16)},{int(h[2:4],16)},{int(h[4:],16)},{a})"
+    v1 = [norm(s1["attack_strength"],0,2.5), norm(s1["defense_strength"],0,3.0),
+          norm(s1["form_weighted"],0,100), s1["clean_sheet_rate"], s1["btts_rate"],
+          norm(s1["consistency"],0,3.0)]
+    v2 = [norm(s2["attack_strength"],0,2.5), norm(s2["defense_strength"],0,3.0),
+          norm(s2["form_weighted"],0,100), s2["clean_sheet_rate"], s2["btts_rate"],
+          norm(s2["consistency"],0,3.0)]
     fig = go.Figure()
-
-    for vals, name, color in [(v1, t1, "#60A5FA"), (v2, t2, "#FB923C")]:
-        fig.add_trace(
-            go.Scatterpolar(
-                r=vals + [vals[0]],
-                theta=cats + [cats[0]],
-                fill="toself",
-                name=name[:14],
-                line=dict(color=color, width=2),
-                fillcolor=hex_to_rgba(color, 0.12),
-            )
-        )
-
+    for vals, name, color in [(v1,t1,"#60A5FA"),(v2,t2,"#FB923C")]:
+        fig.add_trace(go.Scatterpolar(r=vals+[vals[0]], theta=cats+[cats[0]], fill="toself",
+                                      name=name[:14], line=dict(color=color, width=2),
+                                      fillcolor=hex_rgba(color, 0.12)))
     fig.update_layout(
-        **PLOTLY_LAYOUT,
-        margin=dict(l=30, r=30, t=20, b=30),
-        polar=dict(
-            bgcolor="rgba(0,0,0,0)",
-            radialaxis=dict(visible=True, range=[0, 1], tickfont=dict(size=9),
-                            gridcolor="#1E2D45", linecolor="#1E2D45"),
-            angularaxis=dict(tickfont=dict(size=10, family="Inter"), gridcolor="#1E2D45",
-                             linecolor="#1E2D45"),
-        ),
-        legend=dict(orientation="h", y=-0.08, x=0.5, xanchor="center",
-                    font=dict(size=11), bgcolor="rgba(0,0,0,0)"),
+        **PLOTLY_LAYOUT, margin=dict(l=30,r=30,t=20,b=30),
+        polar=dict(bgcolor="rgba(0,0,0,0)",
+                   radialaxis=dict(visible=True,range=[0,1],tickfont=dict(size=9),
+                                   gridcolor="#1E2D45",linecolor="#1E2D45"),
+                   angularaxis=dict(tickfont=dict(size=10,family="Inter"),
+                                    gridcolor="#1E2D45",linecolor="#1E2D45")),
+        legend=dict(orientation="h",y=-0.08,x=0.5,xanchor="center",
+                    font=dict(size=11),bgcolor="rgba(0,0,0,0)"),
         height=300,
     )
     return fig
 
 
-def prob_donut(pw: float, pd_: float, pl: float, t1: str, t2: str) -> go.Figure:
+def prob_donut(pw, pd_, pl, t1, t2):
     total = pw + pd_ + pl
     labels = [f"{t1[:12]} Win", "Draw", f"{t2[:12]} Win"]
-    values = [pw / total * 100, pd_ / total * 100, pl / total * 100]
-    colors = ["#60A5FA", "#FBBF24", "#FB923C"]
-
+    values = [pw/total*100, pd_/total*100, pl/total*100]
     fig = go.Figure(go.Pie(
-        labels=labels, values=values,
-        hole=0.62,
-        marker=dict(colors=colors, line=dict(color="#080D1A", width=3)),
-        textfont=dict(size=11, family="Inter"),
+        labels=labels, values=values, hole=0.62,
+        marker=dict(colors=["#60A5FA","#FBBF24","#FB923C"], line=dict(color="#080D1A",width=3)),
+        textfont=dict(size=11,family="Inter"),
         hovertemplate="%{label}: %{value:.1f}%<extra></extra>",
     ))
-    fig.update_layout(
-        **PLOTLY_LAYOUT,
-        margin=_MARGIN_DEFAULT,
-        height=240,
-        showlegend=True,
-        legend=dict(orientation="h", y=-0.1, x=0.5, xanchor="center",
-                    font=dict(size=10)),
-    )
+    fig.update_layout(**PLOTLY_LAYOUT, margin=_MARGIN_DEFAULT, height=240, showlegend=True,
+                      legend=dict(orientation="h",y=-0.1,x=0.5,xanchor="center",font=dict(size=10)))
     return fig
 
 
-def backtest_chart(test_df, feat_test, eval_model) -> go.Figure:
-    y1 = test_df["Goals1"].values
-    y2 = test_df["Goals2"].values
+def backtest_chart(test_df, feat_test, eval_model):
+    y1 = test_df["Goals1"].values; y2 = test_df["Goals2"].values
     lam1_all, lam2_all = eval_model.predict_xg(feat_test)
-
     correct_cum = []
     correct = 0
     for i, (_, row) in enumerate(test_df.iterrows()):
         mat = eval_model.score_matrix(float(lam1_all[i]), float(lam2_all[i]))
         pw, pd_, pl = eval_model.outcome_probs(mat)
-        pred = ["W", "D", "L"][np.argmax([pw, pd_, pl])]
-        act = "W" if y1[i] > y2[i] else ("D" if y1[i] == y2[i] else "L")
-        if pred == act:
-            correct += 1
-        correct_cum.append(correct / (i + 1) * 100)
-
+        pred = ["W","D","L"][np.argmax([pw,pd_,pl])]
+        act = "W" if y1[i]>y2[i] else ("D" if y1[i]==y2[i] else "L")
+        if pred == act: correct += 1
+        correct_cum.append(correct/(i+1)*100)
     fig = go.Figure()
-    fig.add_hline(y=33.3, line=dict(dash="dash", color="#F87171", width=1),
-                  annotation_text="Random (33%)", annotation_font=dict(size=9, color="#F87171"))
+    fig.add_hline(y=33.3, line=dict(dash="dash",color="#F87171",width=1),
+                  annotation_text="Random (33%)", annotation_font=dict(size=9,color="#F87171"))
     fig.add_trace(go.Scatter(
-        x=list(range(1, len(correct_cum) + 1)),
-        y=correct_cum,
-        mode="lines",
-        line=dict(color="#22D3EE", width=2.5),
-        fill="tozeroy",
-        fillcolor="rgba(34,211,238,0.08)",
+        x=list(range(1,len(correct_cum)+1)), y=correct_cum,
+        mode="lines", line=dict(color="#22D3EE",width=2.5),
+        fill="tozeroy", fillcolor="rgba(34,211,238,0.08)",
         hovertemplate="Match %{x}: %{y:.1f}% accuracy<extra></extra>",
     ))
+    fig.update_layout(**PLOTLY_LAYOUT, margin=_MARGIN_DEFAULT,
+                      xaxis=dict(title=dict(text="Matches"),gridcolor="#1E2D45",linecolor="#1E2D45"),
+                      yaxis=dict(title=dict(text="Cumulative Accuracy (%)"),
+                                 gridcolor="#1E2D45",linecolor="#1E2D45",range=[0,105]),
+                      height=240)
+    return fig
+
+
+def volatility_chart(lookup: dict, top_n: int = 15):
+    sorted_teams = sorted(lookup.keys(), key=lambda t: lookup[t].get("volatility", 0), reverse=True)[:top_n]
+    teams_labels = [t[:20] for t in sorted_teams]
+    vol_vals = [lookup[t].get("volatility", 0) * 100 for t in sorted_teams]
+    colors = ["#F87171" if v > 60 else ("#FBBF24" if v > 35 else "#34D399") for v in vol_vals]
+    fig = go.Figure(go.Bar(
+        x=vol_vals, y=teams_labels, orientation="h",
+        marker=dict(color=colors, line=dict(color="#080D1A", width=1)),
+        text=[f"{v:.0f}" for v in vol_vals], textposition="outside",
+        textfont=dict(size=10, family="JetBrains Mono", color="#94A3B8"),
+        hovertemplate="%{y}: %{x:.1f}<extra></extra>",
+    ))
     fig.update_layout(
-        **PLOTLY_LAYOUT,
-        margin=_MARGIN_DEFAULT,
-        xaxis=dict(title=dict(text="Matches"), gridcolor="#1E2D45", linecolor="#1E2D45"),
-        yaxis=dict(title=dict(text="Cumulative Accuracy (%)"), gridcolor="#1E2D45",
-                   linecolor="#1E2D45", range=[0, 105]),
-        height=240,
+        **PLOTLY_LAYOUT, margin=dict(l=10,r=40,t=20,b=10),
+        xaxis=dict(title=dict(text="Volatility Score (0–100)"),gridcolor="#1E2D45",linecolor="#1E2D45",range=[0,100]),
+        yaxis=dict(autorange="reversed",tickfont=dict(size=10),gridcolor="#1E2D45"),
+        height=max(280, top_n * 22),
     )
     return fig
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# UI COMPONENTS
+# UI HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 def section(title: str, icon: str = ""):
     st.markdown(f"""
@@ -1211,21 +1087,34 @@ def section(title: str, icon: str = ""):
 </div>""", unsafe_allow_html=True)
 
 
-def vs_banner(t1: str, t2: str, lam1: float, lam2: float):
+def confidence_badge(conf: float) -> str:
+    if conf >= 0.60:
+        return f'<span class="unc-badge unc-low">HIGH {conf*100:.0f}%</span>'
+    elif conf >= 0.45:
+        return f'<span class="unc-badge unc-med">MED {conf*100:.0f}%</span>'
+    else:
+        return f'<span class="unc-badge unc-high">LOW {conf*100:.0f}%</span>'
+
+
+def vs_banner(t1, t2, lam1, lam2, confidence: float = None):
+    conf_html = ""
+    if confidence is not None:
+        conf_html = f'<div style="margin-top:.4rem;">{confidence_badge(confidence)}</div>'
     st.markdown(f"""
 <div class="vs-banner">
   <div class="vs-team-t1">{t1}</div>
   <div class="vs-center">
     <div class="vs-score">{lam1:.1f} – {lam2:.1f}</div>
     <div class="vs-badge">Expected Goals</div>
+    {conf_html}
   </div>
   <div class="vs-team-t2">{t2}</div>
 </div>""", unsafe_allow_html=True)
 
 
-def outcome_cards(pw: float, pd_: float, pl: float, btts: float, t1: str, t2: str):
+def outcome_cards(pw, pd_, pl, btts, t1, t2):
     total = pw + pd_ + pl
-    w_pct, d_pct, l_pct = pw / total * 100, pd_ / total * 100, pl / total * 100
+    w_pct, d_pct, l_pct = pw/total*100, pd_/total*100, pl/total*100
     st.markdown(f"""
 <div class="outcome-grid">
   <div class="outcome-cell win">
@@ -1241,61 +1130,54 @@ def outcome_cards(pw: float, pd_: float, pl: float, btts: float, t1: str, t2: st
     <div class="outcome-label">{t2[:12]} Win</div>
   </div>
 </div>
-<div style="display:flex; justify-content:center; margin-top:0.8rem;">
-  <div style="background:var(--surf3); border-radius:8px; padding:0.4rem 1.2rem; border:1px solid var(--border);">
-    <span style="font-size:.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:.1em;">Both Teams to Score</span>
-    <span style="font-family:'Bebas Neue',sans-serif; font-size:1.6rem; color:var(--accent); margin-left:0.5rem;">{btts*100:.1f}%</span>
+<div style="display:flex;justify-content:center;margin-top:0.8rem;">
+  <div style="background:var(--surf3);border-radius:8px;padding:0.4rem 1.2rem;border:1px solid var(--border);">
+    <span style="font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">Both Teams to Score</span>
+    <span style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:var(--accent);margin-left:0.5rem;">{btts*100:.1f}%</span>
   </div>
 </div>""", unsafe_allow_html=True)
 
 
-def top_scores(top5: list, t1: str, t2: str):
+def top_scores(top5, t1, t2):
     html = '<div class="score-grid">'
     for idx, (g1, g2, prob) in enumerate(top5):
-        outcome = f"{t1[:8]} Win" if g1 > g2 else ("Draw" if g1 == g2 else f"{t2[:8]} Win")
-        cls = "score-pill top1" if idx == 0 else "score-pill"
-        html += f"""
-<div class="{cls}">
-  <span class="score-num">{g1}–{g2}</span>
-  <span class="score-tag">{outcome}</span>
-  <span class="score-pct">{prob*100:.1f}%</span>
-</div>"""
+        outcome = f"{t1[:8]} Win" if g1>g2 else ("Draw" if g1==g2 else f"{t2[:8]} Win")
+        cls = "score-pill top1" if idx==0 else "score-pill"
+        html += f'<div class="{cls}"><span class="score-num">{g1}–{g2}</span><span class="score-tag">{outcome}</span><span class="score-pct">{prob*100:.1f}%</span></div>'
     html += "</div>"
     st.markdown(html, unsafe_allow_html=True)
 
 
-def verdict_box(pw: float, pd_: float, pl: float, t1: str, t2: str):
+def verdict_box(pw, pd_, pl, t1, t2):
     total = pw + pd_ + pl
     if pw >= pd_ and pw >= pl:
-        txt = f"{t1} TO WIN"
-        conf = f"{pw/total*100:.0f}% confidence"
+        txt = f"{t1} TO WIN"; conf = f"{pw/total*100:.0f}% confidence"
     elif pd_ >= pw and pd_ >= pl:
-        txt = "MATCH ENDS IN A DRAW"
-        conf = f"{pd_/total*100:.0f}% confidence"
+        txt = "MATCH ENDS IN A DRAW"; conf = f"{pd_/total*100:.0f}% confidence"
     else:
-        txt = f"{t2} TO WIN"
-        conf = f"{pl/total*100:.0f}% confidence"
+        txt = f"{t2} TO WIN"; conf = f"{pl/total*100:.0f}% confidence"
     st.markdown(f"""
 <div class="verdict">
   <div class="verdict-main">⚽ {txt}</div>
-  <div class="verdict-sub">{conf} based on Poisson × Gradient Boost × Random Forest ensemble</div>
+  <div class="verdict-sub">{conf} — Poisson × Gradient Boost × Random Forest ensemble</div>
 </div>""", unsafe_allow_html=True)
 
 
-def stats_comparison(s1: dict, s2: dict, t1: str, t2: str):
+def stats_comparison(s1, s2, t1, t2):
     rows = [
-        ("Elo Rating",         "elo",              ".0f",  None),
-        ("Elo Trend (5 gms)",  "elo_trend",        "+.1f", None),
-        ("Goals Scored (avg)", "raw_attack",        ".2f",  "higher"),
-        ("Goals Conceded",     "raw_defense",       ".2f",  "lower"),
-        ("Attack Strength",    "attack_strength",   ".2f",  "higher"),
-        ("Defense Weakness",   "defense_weakness",  ".2f",  "lower"),
-        ("Form (last 5)",      "form_last5",        ".1f",  "higher"),
-        ("Clean Sheet Rate",   "clean_sheet_rate",  ".1%",  "higher"),
-        ("BTTS Rate",          "btts_rate",         ".1%",  None),
-        ("Consistency",        "consistency",       ".2f",  "higher"),
-        ("Opponent Adj. Attack", "opp_attack",      ".2f",  "higher"),
-        ("Opponent Adj. Defense","opp_defense",     ".2f",  "lower"),
+        ("Elo Rating",          "elo",              ".0f",  None),
+        ("Elo Trend (5 gms)",   "elo_trend",        "+.1f", None),
+        ("Goals Scored (avg)",  "raw_attack",       ".2f",  "higher"),
+        ("Goals Conceded",      "raw_defense",      ".2f",  "lower"),
+        ("Attack Strength",     "attack_strength",  ".2f",  "higher"),
+        ("Defense Weakness",    "defense_weakness", ".2f",  "lower"),
+        ("Form (last 5)",       "form_last5",       ".1f",  "higher"),
+        ("Clean Sheet Rate",    "clean_sheet_rate", ".1%",  "higher"),
+        ("BTTS Rate",           "btts_rate",        ".1%",  None),
+        ("Consistency",         "consistency",      ".2f",  "higher"),
+        ("Opp. Adj. Attack",    "opp_attack",       ".2f",  "higher"),
+        ("Opp. Adj. Defense",   "opp_defense",      ".2f",  "lower"),
+        ("Volatility",          "volatility",       ".2f",  "lower"),
     ]
     html = f"""
 <div style="margin-top:.5rem;">
@@ -1308,22 +1190,16 @@ def stats_comparison(s1: dict, s2: dict, t1: str, t2: str):
         v1, v2 = s1.get(key, 0), s2.get(key, 0)
         c1, c2 = "#60A5FA", "#FB923C"
         if better == "higher":
-            if v1 > v2:
-                c1 = "#34D399"
-            elif v2 > v1:
-                c2 = "#34D399"
+            if v1 > v2: c1 = "#34D399"
+            elif v2 > v1: c2 = "#34D399"
         elif better == "lower":
-            if v1 < v2:
-                c1 = "#34D399"
-            elif v2 < v1:
-                c2 = "#34D399"
-        f1 = format(v1, fmt)
-        f2 = format(v2, fmt)
+            if v1 < v2: c1 = "#34D399"
+            elif v2 < v1: c2 = "#34D399"
         html += f"""
   <div class="stat-row">
-    <div class="stat-val-t1" style="color:{c1};">{f1}</div>
+    <div class="stat-val-t1" style="color:{c1};">{format(v1, fmt)}</div>
     <div class="stat-name">{label}</div>
-    <div class="stat-val-t2" style="color:{c2};">{f2}</div>
+    <div class="stat-val-t2" style="color:{c2};">{format(v2, fmt)}</div>
   </div>"""
     html += "</div>"
     st.markdown(html, unsafe_allow_html=True)
@@ -1333,11 +1209,10 @@ def stats_comparison(s1: dict, s2: dict, t1: str, t2: str):
 # PAGES
 # ─────────────────────────────────────────────────────────────────────────────
 def page_predict(state: dict):
+    st.markdown("### Match Prediction")
     model = state["final_model"]
     engine = state["final_engine"]
     teams = state["teams"]
-
-    st.markdown("### Match Prediction")
 
     col_t1, col_vs, col_t2 = st.columns([5, 1, 5])
     with col_t1:
@@ -1346,11 +1221,7 @@ def page_predict(state: dict):
         t1 = st.selectbox("🔵 Team 1", teams, key="t1_sel", index=t1_default_idx)
     with col_vs:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        st.markdown(
-            "<div style='text-align:center;font-family:\"Bebas Neue\",sans-serif;"
-            "font-size:1.4rem;color:#94A3B8;padding-top:.7rem'>VS</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("<div style='text-align:center;font-family:\"Bebas Neue\",sans-serif;font-size:1.4rem;color:#94A3B8;padding-top:.7rem'>VS</div>", unsafe_allow_html=True)
     with col_t2:
         default_t2 = teams[1] if len(teams) > 1 else teams[0]
         t2_default_idx = teams.index(st.session_state.get("t2_prev", default_t2)) \
@@ -1362,6 +1233,16 @@ def page_predict(state: dict):
         stage = st.radio("Stage", ["Group Stage", "Knockout"], horizontal=True, label_visibility="collapsed")
     with col_btn:
         predict_clicked = st.button("⚽  PREDICT MATCH", use_container_width=True)
+
+    # Show active weights notice
+    ew = st.session_state.get("ensemble_weights", None)
+    use_manual = st.session_state.get("use_manual_weights", False)
+    if use_manual and ew:
+        st.markdown(
+            f"<div style='font-size:.75rem;color:#FBBF24;margin-bottom:.4rem;'>⚙️ Using manual weights — "
+            f"Poisson {ew['poisson']:.2f} · GB {ew['gb']:.2f} · RF {ew['rf']:.2f}</div>",
+            unsafe_allow_html=True,
+        )
 
     if predict_clicked:
         if t1 == t2:
@@ -1379,17 +1260,13 @@ def page_predict(state: dict):
         st.markdown("""
 <div style="text-align:center;padding:3rem;color:#475569;border:1px dashed #1E2D45;border-radius:12px;margin-top:1rem;">
   <div style="font-size:2.5rem;margin-bottom:.5rem;">⚽</div>
-  <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.1em;">
-    Select two teams and click Predict
-  </div>
-  <div style="font-size:.85rem;margin-top:.4rem;">
-    Powered by Poisson regression · Gradient Boosting · Random Forest · Dixon-Coles · Negative Binomial
-  </div>
+  <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.1em;">Select two teams and click Predict</div>
+  <div style="font-size:.85rem;margin-top:.4rem;">Powered by Poisson · Gradient Boosting · Random Forest · Dixon-Coles · Negative Binomial</div>
 </div>""", unsafe_allow_html=True)
         return
 
     r = result
-    vs_banner(r["team1"], r["team2"], r["lam1"], r["lam2"])
+    vs_banner(r["team1"], r["team2"], r["lam1"], r["lam2"], r.get("confidence"))
 
     col_left, col_right = st.columns([3, 2])
     with col_left:
@@ -1397,10 +1274,8 @@ def page_predict(state: dict):
         outcome_cards(r["win"], r["draw"], r["loss"], r["btts"], r["team1"], r["team2"])
         verdict_box(r["win"], r["draw"], r["loss"], r["team1"], r["team2"])
     with col_right:
-        st.plotly_chart(
-            prob_donut(r["win"], r["draw"], r["loss"], r["team1"], r["team2"]),
-            width="stretch", config={"displayModeBar": False},
-        )
+        st.plotly_chart(prob_donut(r["win"], r["draw"], r["loss"], r["team1"], r["team2"]),
+                        width="stretch", config={"displayModeBar": False})
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -1413,15 +1288,11 @@ def page_predict(state: dict):
         stats_comparison(r["stats1"], r["stats2"], r["team1"], r["team2"])
     with col_heat:
         section("Score Probability Matrix", "🔥")
-        st.plotly_chart(
-            score_heatmap(r["matrix"], r["team1"], r["team2"]),
-            width="stretch", config={"displayModeBar": False},
-        )
+        st.plotly_chart(score_heatmap(r["matrix"], r["team1"], r["team2"]),
+                        width="stretch", config={"displayModeBar": False})
         section("Attribute Radar", "🎭")
-        st.plotly_chart(
-            radar_chart(r["stats1"], r["stats2"], r["team1"], r["team2"]),
-            width="stretch", config={"displayModeBar": False},
-        )
+        st.plotly_chart(radar_chart(r["stats1"], r["stats2"], r["team1"], r["team2"]),
+                        width="stretch", config={"displayModeBar": False})
 
 
 def page_backtest(state: dict):
@@ -1432,37 +1303,78 @@ def page_backtest(state: dict):
         unsafe_allow_html=True,
     )
 
-    metrics = state["metrics"]
-    m = metrics
+    # ── Custom weights rerun ─────────────────────────────────────────────────
+    ew = st.session_state.get("ensemble_weights", {"poisson": 1/3, "gb": 1/3, "rf": 1/3})
 
+    with st.expander("🔧 Rerun Backtest with Custom Weights", expanded=False):
+        st.markdown(
+            "<p style='color:#94A3B8;font-size:.8rem;'>Adjust the sliders in the sidebar Advanced Settings, "
+            "then click the button below to measure performance with those weights.</p>",
+            unsafe_allow_html=True,
+        )
+        col_winfo, col_wbtn = st.columns([3, 1])
+        with col_winfo:
+            st.markdown(
+                f"<div style='font-size:.8rem;color:#FBBF24;padding:.5rem;background:#101828;border-radius:6px;"
+                f"border:1px solid #1E2D45;'>"
+                f"Current sidebar weights → Poisson <b>{ew['poisson']:.2f}</b> · "
+                f"GB <b>{ew['gb']:.2f}</b> · RF <b>{ew['rf']:.2f}</b></div>",
+                unsafe_allow_html=True,
+            )
+        with col_wbtn:
+            run_custom = st.button("▶ Run Custom", use_container_width=True)
+
+        if run_custom:
+            with st.spinner("Running backtest with custom weights…"):
+                custom_metrics = run_custom_backtest(state, ew)
+            st.session_state["custom_bt_metrics"] = custom_metrics
+
+        custom_m = st.session_state.get("custom_bt_metrics")
+        if custom_m:
+            base_m = state["metrics"]
+            delta_acc = custom_m["outcome_acc_pct"] - base_m["outcome_acc_pct"]
+            delta_nll = custom_m["score_nll"] - base_m["score_nll"]
+            st.markdown("<hr style='border-color:#1E2D45;margin:.75rem 0;'>", unsafe_allow_html=True)
+            st.markdown("<p style='color:#22D3EE;font-size:.8rem;font-weight:600;'>Custom Weights Results vs CV-Tuned Baseline</p>", unsafe_allow_html=True)
+            cc1, cc2, cc3, cc4 = st.columns(4)
+            cc1.metric("Outcome Acc.", f"{custom_m['outcome_acc_pct']:.1f}%",
+                       delta=f"{delta_acc:+.1f}pp")
+            cc2.metric("Exact Score Acc.", f"{custom_m['exact_score_pct']:.1f}%")
+            cc3.metric("Score NLL", f"{custom_m['score_nll']:.3f}",
+                       delta=f"{delta_nll:+.3f}", delta_color="inverse")
+            cc4.metric("Avg Confidence", f"{custom_m.get('avg_confidence',0)*100:.1f}%")
+
+    # ── Default metrics ──────────────────────────────────────────────────────
+    section("Model Performance (CV-Tuned Weights)", "📊")
+    m = state["metrics"]
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Outcome Accuracy", f"{m['outcome_acc_pct']:.1f}%")
     c2.metric("Exact Score Acc.", f"{m['exact_score_pct']:.1f}%")
     c3.metric("Score NLL", f"{m['score_nll']:.3f}")
     c4.metric("Dixon-Coles ρ", f"{m['rho']:+.4f}")
 
-    c5, c6 = st.columns(2)
-    c5.metric("Overdispersion T1", f"{m.get('overdispersion_t1', 0.15):.3f}",
-              help="Negative Binomial alpha for Team 1 goals (variance inflation)")
-    c6.metric("Overdispersion T2", f"{m.get('overdispersion_t2', 0.15):.3f}",
-              help="Negative Binomial alpha for Team 2 goals")
+    c5, c6, c7, c8 = st.columns(4)
+    c5.metric("Overdispersion α₁", f"{m.get('overdispersion_t1', 0.15):.3f}")
+    c6.metric("Overdispersion α₂", f"{m.get('overdispersion_t2', 0.15):.3f}")
+    c7.metric("Avg Confidence", f"{m.get('avg_confidence', 0)*100:.1f}%",
+              help="Mean max-outcome probability across holdout matches")
+    c8.metric("Low-Conf Matches", f"{m.get('low_confidence_pct', 0):.1f}%",
+              help="% of matches where max outcome prob < 45% (toss-ups)")
 
     section("Cumulative Accuracy", "📈")
-    st.plotly_chart(
-        backtest_chart(state["test_df"], state["feat_test"], state["eval_model"]),
-        width="stretch", config={"displayModeBar": False},
-    )
+    st.plotly_chart(backtest_chart(state["test_df"], state["feat_test"], state["eval_model"]),
+                    width="stretch", config={"displayModeBar": False})
 
-    section("Match Log", "📋")
-
+    # ── Uncertainty / Volatility section ─────────────────────────────────────
+    section("Prediction Uncertainty in Holdout", "🎲")
     eval_model = state["eval_model"]
     test_df = state["test_df"]
     feat_test = state["feat_test"]
-
     y1 = test_df["Goals1"].values
     y2 = test_df["Goals2"].values
     lam1_all, lam2_all = eval_model.predict_xg(feat_test)
 
+    confs, correct_flags = [], []
     rows = []
     for i, (_, row) in enumerate(test_df.iterrows()):
         mat = eval_model.score_matrix(float(lam1_all[i]), float(lam2_all[i]))
@@ -1470,19 +1382,46 @@ def page_backtest(state: dict):
         flat = np.argsort(mat.ravel())[::-1]
         pg1, pg2 = divmod(int(flat[0]), mat.shape[1])
         prob = float(mat[pg1, pg2]) * 100
-
-        act_out = "W" if y1[i] > y2[i] else ("D" if y1[i] == y2[i] else "L")
-        pred_out = ["W", "D", "L"][np.argmax([pw, pd_, pl])]
-
+        conf = float(max(pw, pd_, pl))
+        act_out = "W" if y1[i]>y2[i] else ("D" if y1[i]==y2[i] else "L")
+        pred_out = ["W","D","L"][np.argmax([pw,pd_,pl])]
+        correct = act_out == pred_out
+        confs.append(conf)
+        correct_flags.append(int(correct))
         rows.append({
             "Match": f"{row['Team 1']} vs {row['Team 2']}",
             "Actual": f"{int(y1[i])}–{int(y2[i])}",
             "Predicted": f"{pg1}–{pg2}",
-            "Prob": f"{prob:.1f}%",
+            "Score%": f"{prob:.1f}%",
             "xG": f"{lam1_all[i]:.2f}/{lam2_all[i]:.2f}",
-            "✓": "✓" if act_out == pred_out else "✗",
+            "Conf": f"{conf*100:.0f}%",
+            "✓": "✓" if correct else "✗",
         })
 
+    # Confidence distribution
+    conf_arr = np.array(confs)
+    bins = ["<45%", "45-55%", "55-65%", ">65%"]
+    counts = [
+        int((conf_arr < 0.45).sum()),
+        int(((conf_arr >= 0.45) & (conf_arr < 0.55)).sum()),
+        int(((conf_arr >= 0.55) & (conf_arr < 0.65)).sum()),
+        int((conf_arr >= 0.65).sum()),
+    ]
+    colors_conf = ["#F87171","#FBBF24","#60A5FA","#34D399"]
+    fig_conf = go.Figure(go.Bar(
+        x=bins, y=counts, marker=dict(color=colors_conf, line=dict(color="#080D1A",width=1)),
+        text=counts, textposition="outside", textfont=dict(size=11,family="JetBrains Mono"),
+        hovertemplate="%{x}: %{y} matches<extra></extra>",
+    ))
+    fig_conf.update_layout(
+        **PLOTLY_LAYOUT, margin=dict(l=10,r=10,t=25,b=10), height=200,
+        xaxis=dict(gridcolor="#1E2D45",linecolor="#1E2D45"),
+        yaxis=dict(gridcolor="#1E2D45",linecolor="#1E2D45",title=dict(text="Matches")),
+        title=dict(text="Confidence Distribution", font=dict(family="Bebas Neue",size=13,color="#94A3B8")),
+    )
+    st.plotly_chart(fig_conf, width="stretch", config={"displayModeBar": False})
+
+    section("Match Log", "📋")
     results_df = pd.DataFrame(rows)
 
     def color_result(val):
@@ -1490,12 +1429,14 @@ def page_backtest(state: dict):
             return "background-color:rgba(52,211,153,.15);color:#34D399;font-weight:700"
         elif val == "✗":
             return "background-color:rgba(248,113,113,.1);color:#F87171;font-weight:700"
+        elif val and val.endswith("%") and int(val[:-1]) < 45:
+            return "color:#F87171"
         return ""
 
     try:
-        styled = results_df.style.map(color_result, subset=["✓"])
+        styled = results_df.style.map(color_result, subset=["✓", "Conf"])
     except AttributeError:
-        styled = results_df.style.applymap(color_result, subset=["✓"])
+        styled = results_df.style.applymap(color_result, subset=["✓", "Conf"])
 
     st.dataframe(styled, use_container_width=True, hide_index=True, height=420)
 
@@ -1504,6 +1445,18 @@ def page_teams(state: dict):
     st.markdown("### Team Stats Browser")
     lookup = state["final_engine"].build_lookup()
     teams = sorted(lookup.keys())
+
+    # ── Volatility callout ───────────────────────────────────────────────────
+    with st.expander("📊 Volatility Rankings — Most Unpredictable Teams", expanded=False):
+        st.markdown(
+            "<p style='color:#94A3B8;font-size:.8rem;'>Composite score (0–100) based on "
+            "goal variance, concede variance and result inconsistency. "
+            "Higher = harder to predict.</p>",
+            unsafe_allow_html=True,
+        )
+        top_vol_n = st.slider("Show top N volatile teams", 5, min(50, len(teams)), 20, key="vol_n")
+        st.plotly_chart(volatility_chart(lookup, top_vol_n),
+                        width="stretch", config={"displayModeBar": False})
 
     search = st.text_input("🔍 Search teams", placeholder="Start typing a team name…")
     filtered = [t for t in teams if search.lower() in t.lower()] if search else teams
@@ -1519,33 +1472,58 @@ def page_teams(state: dict):
     with sort_col:
         sort_by = st.selectbox(
             "Sort by",
-            ["Elo Rating", "Attack Strength", "Form", "Clean Sheet Rate", "Opp. Adj. Attack"],
+            [
+                "Elo Rating", "Attack Strength", "Defense Strength", "Form (last 5)",
+                "Form (weighted)", "Clean Sheet Rate", "BTTS Rate",
+                "Opp. Adj. Attack", "Opp. Adj. Defense",
+                "Raw Goals Scored", "Raw Goals Conceded",
+                "Defense Weakness", "Consistency",
+                "Volatility (High→Low)", "Volatility (Low→High)",
+                "Match Count",
+            ],
             label_visibility="collapsed",
         )
+
     sort_map = {
-        "Elo Rating": "elo",
-        "Attack Strength": "attack_strength",
-        "Form": "form_last5",
-        "Clean Sheet Rate": "clean_sheet_rate",
-        "Opp. Adj. Attack": "opp_attack",
+        "Elo Rating":           ("elo",              True),
+        "Attack Strength":      ("attack_strength",  True),
+        "Defense Strength":     ("defense_strength", True),
+        "Form (last 5)":        ("form_last5",       True),
+        "Form (weighted)":      ("form_weighted",    True),
+        "Clean Sheet Rate":     ("clean_sheet_rate", True),
+        "BTTS Rate":            ("btts_rate",        True),
+        "Opp. Adj. Attack":     ("opp_attack",       True),
+        "Opp. Adj. Defense":    ("opp_defense",      False),
+        "Raw Goals Scored":     ("raw_attack",       True),
+        "Raw Goals Conceded":   ("raw_defense",      False),
+        "Defense Weakness":     ("defense_weakness", False),
+        "Consistency":          ("consistency",      True),
+        "Volatility (High→Low)":("volatility",       True),
+        "Volatility (Low→High)":("volatility",       False),
+        "Match Count":          ("match_count",      True),
     }
-    sort_key = sort_map[sort_by]
-    filtered = sorted(filtered, key=lambda t: lookup[t].get(sort_key, 0), reverse=True)
+    sort_key, sort_desc = sort_map[sort_by]
+    filtered = sorted(filtered, key=lambda t: lookup[t].get(sort_key, 0), reverse=sort_desc)
 
     cols_per_row = 3
-    for i in range(0, min(len(filtered), 30), cols_per_row):
+    # Show ALL teams — no artificial cap
+    for i in range(0, len(filtered), cols_per_row):
         cols = st.columns(cols_per_row)
         for j, col in enumerate(cols):
             if i + j >= len(filtered):
                 break
             team = filtered[i + j]
             s = lookup[team]
-            trend_symbol = "▲" if s["elo_trend"] > 10 else ("▼" if s["elo_trend"] < -10 else "●")
-            trend_color = "#34D399" if s["elo_trend"] > 10 else ("#F87171" if s["elo_trend"] < -10 else "#FBBF24")
-            form_bar = "█" * int(s["form_last5"] / 20) + "░" * (5 - int(s["form_last5"] / 20))
+            trend_symbol = "▲" if s["elo_trend"]>10 else ("▼" if s["elo_trend"]<-10 else "●")
+            trend_color = "#34D399" if s["elo_trend"]>10 else ("#F87171" if s["elo_trend"]<-10 else "#FBBF24")
+            form_bar = "█" * int(s["form_last5"]/20) + "░" * (5 - int(s["form_last5"]/20))
+            vol = s.get("volatility", 0)
+            vol_color = "#F87171" if vol>0.6 else ("#FBBF24" if vol>0.35 else "#34D399")
+            vol_pct = int(vol * 100)
+            vol_fill = int(vol * 100)
             with col:
                 st.markdown(f"""
-<div class="oracle-card" style="cursor:pointer;">
+<div class="oracle-card">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.6rem;">
     <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:.05em;color:#F1F5F9;line-height:1.2;">{team}</div>
     <div style="font-size:.75rem;color:{trend_color};">{trend_symbol} {s['elo_trend']:+.0f}</div>
@@ -1555,13 +1533,21 @@ def page_teams(state: dict):
     <div><span style="color:#94A3B8;">ATK</span> <span style="font-family:'JetBrains Mono',monospace;color:#60A5FA;">{s['attack_strength']:.2f}</span></div>
     <div><span style="color:#94A3B8;">DEF</span> <span style="font-family:'JetBrains Mono',monospace;color:#A78BFA;">{s['defense_strength']:.2f}</span></div>
     <div><span style="color:#94A3B8;">CS%</span> <span style="font-family:'JetBrains Mono',monospace;color:#34D399;">{s['clean_sheet_rate']:.0%}</span></div>
-    <div><span style="color:#94A3B8;">Opp. ATK</span> <span style="font-family:'JetBrains Mono',monospace;color:#60A5FA;">{s.get('opp_attack', 1.0):.2f}</span></div>
-    <div><span style="color:#94A3B8;">Opp. DEF</span> <span style="font-family:'JetBrains Mono',monospace;color:#A78BFA;">{s.get('opp_defense', 1.0):.2f}</span></div>
+    <div><span style="color:#94A3B8;">BTTS</span> <span style="font-family:'JetBrains Mono',monospace;color:#FBBF24;">{s['btts_rate']:.0%}</span></div>
+    <div><span style="color:#94A3B8;">Form</span> <span style="font-family:'JetBrains Mono',monospace;color:#FBBF24;">{s['form_last5']:.0f}</span></div>
+    <div><span style="color:#94A3B8;">OA</span> <span style="font-family:'JetBrains Mono',monospace;color:#60A5FA;">{s.get('opp_attack',1.0):.2f}</span></div>
+    <div><span style="color:#94A3B8;">OD</span> <span style="font-family:'JetBrains Mono',monospace;color:#A78BFA;">{s.get('opp_defense',1.0):.2f}</span></div>
   </div>
   <div style="margin-top:.5rem;font-size:.72rem;color:#94A3B8;">
     Form <span style="font-family:'JetBrains Mono',monospace;color:#FBBF24;font-size:.8rem;">{form_bar}</span>
   </div>
-  <div style="font-size:.68rem;color:#475569;margin-top:.25rem;">{s['match_count']} matches in dataset</div>
+  <div style="margin-top:.4rem;">
+    <div style="display:flex;justify-content:space-between;font-size:.68rem;color:#64748B;margin-bottom:2px;">
+      <span>Volatility</span><span style="color:{vol_color};font-weight:600;">{vol_pct}</span>
+    </div>
+    <div class="vol-bar-bg"><div class="vol-bar-fill" style="width:{vol_fill}%;"></div></div>
+  </div>
+  <div style="font-size:.68rem;color:#475569;margin-top:.25rem;">{s['match_count']} matches</div>
 </div>""", unsafe_allow_html=True)
 
 
@@ -1573,12 +1559,11 @@ def page_model(state: dict):
     with col_a:
         section("Prediction Quality")
         mc1, mc2 = st.columns(2)
-        mc1.metric("Outcome Accuracy", f"{m['outcome_acc_pct']:.1f}%",
-                   help="% of matches where Win/Draw/Loss was correctly predicted")
+        mc1.metric("Outcome Accuracy", f"{m['outcome_acc_pct']:.1f}%")
         mc2.metric("Exact Score Accuracy", f"{m['exact_score_pct']:.1f}%")
         mc3, mc4 = st.columns(2)
         mc3.metric("Score NLL (lower=better)", f"{m['score_nll']:.3f}")
-        mc4.metric("Dixon-Coles ρ", f"{m['rho']:+.4f}", help="Low-score correlation correction")
+        mc4.metric("Dixon-Coles ρ", f"{m['rho']:+.4f}")
         mc5, mc6 = st.columns(2)
         mc5.metric("RMSE Team 1 xG", f"{m['rmse_t1']:.3f}")
         mc6.metric("RMSE Team 2 xG", f"{m['rmse_t2']:.3f}")
@@ -1586,36 +1571,31 @@ def page_model(state: dict):
         mc7.metric("MAE Team 1 xG", f"{m['mae_t1']:.3f}")
         mc8.metric("MAE Team 2 xG", f"{m['mae_t2']:.3f}")
         mc9, mc10 = st.columns(2)
-        mc9.metric("Overdispersion α₁", f"{m.get('overdispersion_t1', 0.15):.3f}",
-                   help="Negative Binomial alpha for Team 1; >0 means variance > mean")
-        mc10.metric("Overdispersion α₂", f"{m.get('overdispersion_t2', 0.15):.3f}",
-                    help="Negative Binomial alpha for Team 2")
+        mc9.metric("Overdispersion α₁", f"{m.get('overdispersion_t1', 0.15):.3f}")
+        mc10.metric("Overdispersion α₂", f"{m.get('overdispersion_t2', 0.15):.3f}")
+        mc11, mc12 = st.columns(2)
+        mc11.metric("Avg Confidence", f"{m.get('avg_confidence', 0)*100:.1f}%")
+        mc12.metric("Low-Conf Matches", f"{m.get('low_confidence_pct', 0):.1f}%")
 
     with col_b:
         section("Ensemble Weights")
         w1, w2 = m["w1"], m["w2"]
         model_names = ["Poisson GLM", "Gradient Boost", "Random Forest"]
         colors = ["#22D3EE", "#A78BFA", "#FB923C"]
-
         for label, weights in [("Team 1 Goals", w1), ("Team 2 Goals", w2)]:
             fig = go.Figure(go.Bar(
-                x=model_names, y=[w * 100 for w in weights],
-                marker=dict(color=colors, line=dict(color="#080D1A", width=1.5)),
-                text=[f"{w*100:.0f}%" for w in weights],
-                textposition="outside",
-                textfont=dict(size=11, family="JetBrains Mono"),
+                x=model_names, y=[w*100 for w in weights],
+                marker=dict(color=colors, line=dict(color="#080D1A",width=1.5)),
+                text=[f"{w*100:.0f}%" for w in weights], textposition="outside",
+                textfont=dict(size=11,family="JetBrains Mono"),
                 hovertemplate="%{x}: %{y:.1f}%<extra></extra>",
             ))
             fig.update_layout(
-                **PLOTLY_LAYOUT,
-                margin=dict(l=10, r=10, t=35, b=10),
-                title=dict(text=label, font=dict(family="Bebas Neue", size=14, color="#94A3B8")),
-                yaxis=dict(
-                    title=dict(text="Weight %", font=dict(size=11)),
-                    gridcolor="#1E2D45", range=[0, 60],
-                ),
-                xaxis=dict(linecolor="#1E2D45"),
-                height=200,
+                **PLOTLY_LAYOUT, margin=dict(l=10,r=10,t=35,b=10),
+                title=dict(text=label,font=dict(family="Bebas Neue",size=14,color="#94A3B8")),
+                yaxis=dict(title=dict(text="Weight %",font=dict(size=11)),
+                           gridcolor="#1E2D45",range=[0,60]),
+                xaxis=dict(linecolor="#1E2D45"), height=200,
             )
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
@@ -1628,149 +1608,136 @@ def page_model(state: dict):
     st.markdown("""
 <div class="oracle-card" style="margin-top:.75rem;">
 <p style="color:#94A3B8;font-size:.83rem;line-height:1.6;margin:0;">
-<b style="color:#22D3EE;">Architecture v5.1:</b> 
+<b style="color:#22D3EE;">Architecture v5.2:</b>
 Three-model ensemble (Poisson GLM + Gradient Boosting + Random Forest) with time-series CV weight calibration.
-<b>New:</b> Opponent-adjusted attack/defense strengths via iterative log-linear model, Negative Binomial overdispersion,
-and Both Teams to Score (BTTS) probability. Features include rolling strengths, Elo, form, clean sheets, head‑to‑head, 
-and stage modifiers. Dixon‑Coles correction for low scores, with overdispersion alpha estimated via MLE.
+Manual weight override via sidebar sliders, applied to both predictions and on-demand backtest rerun.
+Opponent-adjusted attack/defense via iterative log-linear model. Negative Binomial overdispersion (MLE).
+Dixon-Coles low-score correction. Team volatility scores from goal and result variance.
+Prediction confidence badges on every match. Both Teams to Score (BTTS) probability.
 </p>
 </div>""", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SIDEBAR (updated with default dataset)
+# SIDEBAR
 # ─────────────────────────────────────────────────────────────────────────────
-def render_sidebar() -> Optional[pd.DataFrame]:
+def render_sidebar():
     with st.sidebar:
         st.markdown("""
 <div class="sidebar-logo">
-  <div class="sidebar-logo-text">⚽ DELPHI </div>
+  <div class="sidebar-logo-text">⚽ DELPHI</div>
   <div class="sidebar-logo-sub">Advanced Match Prediction</div>
-</div>
-""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
         st.markdown("---")
 
-        # Default dataset handling
+        # Default dataset
         default_df = None
         default_path = Path(DEFAULT_DATASET_PATH)
         if default_path.exists():
             try:
-                df_raw_default = pd.read_csv(default_path)
-                default_df = load_and_clean(df_raw_default)
-                st.success(f"Loaded default dataset: {default_path.name}")
+                default_df = load_and_clean(pd.read_csv(default_path))
+                st.success(f"Loaded default: {default_path.name}")
             except Exception as e:
-                st.warning(f"Could not load default dataset: {e}")
+                st.warning(f"Could not load default: {e}")
 
-        # Upload override
-        st.markdown(
-            "<div class='sidebar-label' style='color:#94A3B8;margin-bottom:0.3rem;'>Or upload your own CSV</div>",
-            unsafe_allow_html=True)
+        st.markdown("<div style='color:#94A3B8;margin-bottom:0.3rem;font-size:.78rem;'>Or upload your own CSV</div>",
+                    unsafe_allow_html=True)
 
-        # Custom styled file uploader - DARK background with GREEN accent
+        st.markdown("""<style>
+[data-testid="stFileUploader"]{background:#0D1F1A!important;border:2px solid #34D399!important;border-radius:10px!important;}
+[data-testid="stFileUploaderDropzone"]{background:#101828!important;border:2px dashed #34D399!important;border-radius:8px!important;}
+[data-testid="stFileUploader"] *{color:#F1F5F9!important;}
+[data-testid="stFileUploader"] button{background:#1E293B!important;color:#34D399!important;border:1px solid #34D399!important;}
+[data-testid="stFileUploader"] svg{fill:#34D399!important;}
+</style>""", unsafe_allow_html=True)
+
+        uploaded = st.file_uploader("Upload CSV", type=["csv"], label_visibility="collapsed")
         st.markdown("""
-        <style>
-        /* Entire uploader */
-        [data-testid="stFileUploader"] {
-            background: #0D1F1A !important;
-            border: 2px solid #34D399 !important;
-            border-radius: 10px !important;
-            padding: 0.75rem !important;
-        }
+<div style='margin-top:.5rem;padding:.6rem;background:#192236;border-radius:8px;border:1px solid #1E2D45;'>
+<p style='font-size:.75rem;color:#94A3B8;margin:0;line-height:1.5;'>
+📋 Required: <code style='color:#34D399;'>Team 1, Team 2, Goals1, Goals2, Elo1, Elo2</code><br>
+Optional: <code style='color:#94A3B8;'>Date, Stage</code>
+</p></div>""", unsafe_allow_html=True)
 
-        /* Drop area */
-        [data-testid="stFileUploaderDropzone"] {
-            background: #101828 !important;
-            border: 2px dashed #34D399 !important;
-            border-radius: 8px !important;
-        }
-
-        /* Everything inside */
-        [data-testid="stFileUploader"] * {
-            color: #F1F5F9 !important;
-        }
-
-        /* Browse files button */
-        [data-testid="stFileUploader"] button {
-            background: #1E293B !important;
-            color: #34D399 !important;
-            border: 1px solid #34D399 !important;
-        }
-
-        /* Button hover */
-        [data-testid="stFileUploader"] button:hover {
-            background: #243244 !important;
-        }
-
-        /* SVG upload icon */
-        [data-testid="stFileUploader"] svg {
-            fill: #34D399 !important;
-        }
-
-        /* Hover effect */
-        [data-testid="stFileUploaderDropzone"]:hover {
-            border-color: #6EE7B7 !important;
-            box-shadow: 0 0 18px rgba(52,211,153,.2);
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-        uploaded = st.file_uploader("Upload CSV (overrides default)", type=["csv"], label_visibility="collapsed")
-
-        st.markdown("""
-        <div style='margin-top:.5rem;padding:.6rem;background:#192236;border-radius:8px;border:1px solid #1E2D45;'>
-        <p style='font-size:.75rem;color:#94A3B8;margin:0;line-height:1.5;'>
-        📋 Required columns:<br>
-        <code style='color:#34D399 !important;font-size:.72rem;background:rgba(52,211,153,0.1);padding:0.1rem 0.3rem;border-radius:3px;'>Team 1, Team 2, Goals1, Goals2, Elo1, Elo2</code><br>
-        <code style='color:#94A3B8 !important;font-size:.72rem;background:rgba(148,163,184,0.08);padding:0.1rem 0.3rem;border-radius:3px;'>Date, Stage</code> <span style='color:#64748B;font-size:.7rem;'>(optional)</span><br>
-        <span style='color:#64748B;font-size:.65rem;'>⬆ Max file size: 200MB</span>
-        </p>
-        </div>""", unsafe_allow_html=True)
-
-        # Determine which dataset to use
         df = None
         if uploaded is not None:
             try:
                 raw_bytes = uploaded.read()
-                df_raw = pd.read_csv(pd.io.common.BytesIO(raw_bytes))
-                df = load_and_clean(df_raw)
-                st.success(f"✅ Using uploaded dataset: {uploaded.name} ({len(df)} matches)")
+                df = load_and_clean(pd.read_csv(pd.io.common.BytesIO(raw_bytes)))
+                st.success(f"✅ {uploaded.name} ({len(df)} matches)")
             except Exception as e:
                 st.error(f"Upload error: {e}")
         elif default_df is not None:
             df = default_df
         else:
-            st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("""
 <div style='text-align:center;padding:1.5rem .5rem;color:#475569;'>
   <div style='font-size:2rem;'>📂</div>
-  <div style='font-size:.82rem;margin-top:.4rem;'>No dataset found.<br>Upload a CSV or place <code>world_cup_clean.csv</code> in the app directory.</div>
+  <div style='font-size:.82rem;margin-top:.4rem;'>No dataset found. Upload a CSV or place
+  <code>world_cup_clean.csv</code> in the app directory.</div>
 </div>""", unsafe_allow_html=True)
-            return None
+            return None, 30
 
-        # Display stats
+        # ── Advanced Model Settings (black expander) ───────────────────────
+        with st.expander("⚙️ Advanced Model Settings", expanded=False):
+            st.markdown("<p style='color:#94A3B8;font-size:.75rem;margin:0 0 .5rem;'>ENSEMBLE WEIGHTS</p>",
+                        unsafe_allow_html=True)
+            w_poisson = st.slider("Poisson GLM", 0.0, 1.0, 0.03, 0.01, key="sl_poisson")
+            w_gb = st.slider("Gradient Boost", 0.0, 1.0, 0.76, 0.01, key="sl_gb")
+            w_rf = st.slider("Random Forest", 0.0, 1.0, 0.21, 0.01, key="sl_rf")
+            total = w_poisson + w_gb + w_rf
+            if total < 1e-9:
+                total = 1.0
+            weights = {
+                "poisson": w_poisson / total,
+                "gb": w_gb / total,
+                "rf": w_rf / total,
+            }
+            st.markdown(
+                f"<p style='color:#FBBF24;font-size:.72rem;margin:.3rem 0;'>"
+                f"Normalised → P {weights['poisson']:.2f} · GB {weights['gb']:.2f} · RF {weights['rf']:.2f}</p>",
+                unsafe_allow_html=True,
+            )
+
+            # toggle to apply weights to predictions
+            use_manual = st.checkbox("Apply to predictions", value=False, key="chk_manual_weights")
+            st.session_state["use_manual_weights"] = use_manual
+
+            st.markdown("<hr style='border-color:#1E2D45;margin:.6rem 0;'>", unsafe_allow_html=True)
+            st.markdown("<p style='color:#94A3B8;font-size:.75rem;margin:0 0 .5rem;'>HOLDOUT SIZE</p>",
+                        unsafe_allow_html=True)
+            max_holdout = max(10, min(300, len(df) // 5))
+            default_holdout = max(MIN_HOLDOUT_MATCHES, int(len(df) * HOLDOUT_FRACTION))
+            default_holdout = min(default_holdout, max_holdout)
+            holdout_n = st.slider(
+                "Holdout matches", 10, max_holdout, default_holdout, 5, key="sl_holdout",
+                help="More holdout = better evaluation but less training data",
+            )
+
+        st.session_state["ensemble_weights"] = weights
+
+        # Stats
         teams_count = df[["Team 1", "Team 2"]].stack().nunique()
         st.markdown(f"""
 <div style='margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;'>
-  <div style='flex:1;min-width:70px;background:#192236;border-radius:8px;
-              border:1px solid #1E2D45;padding:.5rem;text-align:center;'>
+  <div style='flex:1;min-width:70px;background:#192236;border-radius:8px;border:1px solid #1E2D45;padding:.5rem;text-align:center;'>
     <div style='font-family:"Bebas Neue",sans-serif;font-size:1.4rem;color:#22D3EE;'>{len(df):,}</div>
     <div style='font-size:.65rem;color:#64748B;text-transform:uppercase;'>Matches</div>
   </div>
-  <div style='flex:1;min-width:70px;background:#192236;border-radius:8px;
-              border:1px solid #1E2D45;padding:.5rem;text-align:center;'>
+  <div style='flex:1;min-width:70px;background:#192236;border-radius:8px;border:1px solid #1E2D45;padding:.5rem;text-align:center;'>
     <div style='font-family:"Bebas Neue",sans-serif;font-size:1.4rem;color:#A78BFA;'>{teams_count}</div>
     <div style='font-size:.65rem;color:#64748B;text-transform:uppercase;'>Teams</div>
   </div>
 </div>""", unsafe_allow_html=True)
 
-        # Store file hash for caching (use filename or content hash)
         if uploaded is not None:
             fh = file_hash(uploaded.getvalue())
         else:
             fh = hashlib.md5(str(default_path).encode()).hexdigest()
+
         st.session_state["file_hash"] = fh
         st.session_state["df"] = df
-        return df
+        return df, holdout_n
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1779,31 +1746,32 @@ def render_sidebar() -> Optional[pd.DataFrame]:
 def main():
     inject_css()
 
-    df = render_sidebar()
+    result = render_sidebar()
+    if result is None:
+        df, holdout_n = None, 30
+    else:
+        df, holdout_n = result
 
     if df is None:
         st.markdown("""
 <div style='text-align:center;padding:4rem 2rem 2rem;'>
   <div style='font-family:"Bebas Neue",sans-serif;font-size:4rem;letter-spacing:.12em;
               background:linear-gradient(135deg,#22D3EE,#A78BFA);
-              -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-              line-height:1;'>
+              -webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1;'>
     DELPHI
   </div>
   <div style='color:#475569;font-size:1rem;margin-top:.75rem;letter-spacing:.05em;'>
-    ENSEMBLE MATCH PREDICTION  ·  POISSON · GRADIENT BOOST · RANDOM FOREST · DIXON-COLES · NEGATIVE BINOMIAL
+    ENSEMBLE MATCH PREDICTION · POISSON · GRADIENT BOOST · RANDOM FOREST · DIXON-COLES · NEGATIVE BINOMIAL
   </div>
 </div>""", unsafe_allow_html=True)
-
-        col1, col2, col3 = st.columns(3)
-        for col, icon, title, desc in [
-            (col1, "🧠", "3-Model Ensemble",
-             "Poisson GLM, Gradient Boosting, and Random Forest combined with time-series CV calibration."),
-            (col2, "📐", "Dixon-Coles & Overdispersion",
-             "Low-score correction via ρ and goal variance via Negative Binomial α."),
-            (col3, "🏹", "Opponent-Adjusted Stats",
-             "Attack/defense strengths estimated via log-linear model, controlling for opponent quality."),
-        ]:
+        for col, icon, title, desc in zip(
+            st.columns(3),
+            ["🧠", "📐", "🏹"],
+            ["3-Model Ensemble", "Dixon-Coles & Overdispersion", "Opponent-Adjusted Stats"],
+            ["Poisson GLM, Gradient Boosting, and Random Forest combined with time-series CV calibration.",
+             "Low-score correction via ρ and goal variance modelled by Negative Binomial α.",
+             "Attack/defense strengths via log-linear model, controlling for opponent quality."],
+        ):
             col.markdown(f"""
 <div class="oracle-card" style="text-align:center;padding:1.5rem;">
   <div style='font-size:2rem;margin-bottom:.5rem;'>{icon}</div>
@@ -1814,16 +1782,20 @@ def main():
 
     fh = st.session_state.get("file_hash", "")
 
-    with st.spinner("🏋️ Training ensemble model — this takes ~30 seconds on first load…"):
-        state = cached_train(fh, df)
+    with st.spinner("🏋️ Training ensemble model — ~30 seconds on first load…"):
+        state = cached_train(fh, holdout_n, df)
+
+    # ── Apply manual weights to final model if checkbox is on ───────────────
+    ew = st.session_state.get("ensemble_weights", {"poisson": 1/3, "gb": 1/3, "rf": 1/3})
+    use_manual = st.session_state.get("use_manual_weights", False)
+    if use_manual:
+        state["final_model"].apply_manual_weights(ew)
+    else:
+        state["final_model"].restore_cv_weights()
 
     tab_predict, tab_backtest, tab_teams, tab_model = st.tabs([
-        "⚽  Predict Match",
-        "📊  Backtest",
-        "🏆  Teams",
-        "🔬  Model Stats",
+        "⚽  Predict Match", "📊  Backtest", "🏆  Teams", "🔬  Model Stats",
     ])
-
     with tab_predict:
         page_predict(state)
     with tab_backtest:
